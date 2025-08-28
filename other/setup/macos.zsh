@@ -49,11 +49,12 @@ if [[ $OSTYPE == 'darwin'* ]]; then
     done
     echo
 
-    # check if noxim already downloaded
-    # -> try to update if it does
-    # -> clone if not
-    echo -e $MAGENTA"Downloading noxim..."$RESET
-    if [ -d "./noxim" ]; then
+    # check if we're already in a noxim repository
+    echo -e $MAGENTA"Setting up noxim..."$RESET
+    if [ -f "../../bin/Makefile" ] && [ -d "../../src" ]; then
+        echo -e $GREEN"Already in noxim repository, using existing structure."$RESET
+        cd ../../bin
+    elif [ -d "./noxim" ]; then
         echo -e $GREEN"noxim repository already exists."$RESET
         echo "Pulling from origin..."
         cd noxim 
@@ -83,17 +84,24 @@ if [[ $OSTYPE == 'darwin'* ]]; then
     echo -e $MAGENTA"Building yaml-cpp..."$RESET
     cd yaml-cpp/
 
-    if [ "`git branch --list r0.6.0`" ]; then
-        git checkout r0.6.0
+    # Use a more recent version that's compatible with modern CMake
+    if [ "`git branch --list 0.7.0`" ]; then
+        git checkout 0.7.0
     else 
-        git checkout -b r0.6.0 yaml-cpp-0.6.0
+        git fetch --tags
+        git checkout -b 0.7.0 yaml-cpp-0.7.0
     fi
 
+    mkdir -p build
+    cd build
+    cmake .. -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    cmake --build . --config Release
+    cd ..
+    
+    # Create lib directory and copy built library for Makefile compatibility
     mkdir -p lib
-    cd lib
-    cmake ..
-    cmake --build .
-    cd ../..
+    cp build/libyaml-cpp.a lib/
+    cd ..
     echo -e $GREEN"Installed yaml-cpp successfully\n"$RESET
 
     # systemc download
