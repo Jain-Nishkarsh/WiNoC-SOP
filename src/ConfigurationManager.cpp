@@ -86,6 +86,7 @@ void loadConfiguration() {
     GlobalParams::rnd_generator_seed = time(NULL);
     GlobalParams::detailed = readParam<bool>(config, "detailed");
     GlobalParams::dyad_threshold = readParam<double>(config, "dyad_threshold");
+    GlobalParams::da_threshold = readParam<int>(config, "da_threshold", 5);
     GlobalParams::max_volume_to_be_drained = readParam<unsigned int>(config, "max_volume_to_be_drained");
     //GlobalParams::hotspots;
     GlobalParams::show_buffer_stats = readParam<bool>(config, "show_buffer_stats");

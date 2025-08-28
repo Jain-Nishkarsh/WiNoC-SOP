@@ -391,6 +391,13 @@ vector<int> Router::nextDeltaHops(RouteData rd) {
 
 vector < int > Router::routingFunction(const RouteData & route_data)
 {
+	// Check if we're using DA_BMAC routing algorithm
+	if (GlobalParams::routing_algorithm == "DA_BMAC")
+	{
+		// Let DA_BMAC algorithm make the wireless vs wired decision
+		return routingAlgorithm->route(this, route_data);
+	}
+	
 	if (GlobalParams::use_winoc)
 	{
 		// - If the current node C and the destination D are connected to an radiohub, use wireless

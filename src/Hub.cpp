@@ -467,6 +467,8 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
+		else if (macPolicy == BMAC_BIDIRECTIONAL)
+			txRadioProcessBMAC(channel);
 		else
 			assert(false);
 	}
@@ -687,4 +689,44 @@ int Hub::selectChannel(int src_hub, int dst_hub) const
 	}
 
 	return NOT_VALID;
+}
+
+void Hub::txRadioProcessBMAC(int channel)
+{
+	// BMAC bidirectional token ring processing
+	
+	if (flag[channel]->read() == RELEASE_CHANNEL)
+		flag[channel]->write(HOLD_CHANNEL);
+
+	if (current_token_holder[channel]->read() == local_id)
+	{
+		if (!init[channel]->buffer_tx.IsEmpty())
+		{
+			// BMAC: Check if we have sufficient time for transmission
+			// Use a more reasonable token expiration check
+			int required_cycles = flit_transmission_cycles[channel];
+			int available_cycles = current_token_expiration[channel]->read();
+			
+			if (available_cycles < required_cycles && available_cycles > 0)
+			{
+				LOG << "BMAC: Not enough token time (" << available_cycles 
+				    << ") for transmission requiring " << required_cycles 
+				    << " cycles on channel " << channel << endl;
+				// In BMAC, we can request a direction change or wait
+				// For now, just wait for next token round
+			}
+			else
+			{
+				flag[channel]->write(HOLD_CHANNEL);
+				LOG << "BMAC: Starting transmission on channel " << channel << endl;
+				init[channel]->start_request_event.notify();
+			}
+		}
+		else
+		{
+			// BMAC: No data to transmit, release token for optimal bidirectional flow
+			LOG << "BMAC: No data to transmit, releasing token for channel " << channel << endl;
+			flag[channel]->write(RELEASE_CHANNEL);
+		}
+	}
 }

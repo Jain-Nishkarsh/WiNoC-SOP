@@ -23,6 +23,14 @@ void NoC::buildCommon()
 	token_ring->clock(clock);
 	token_ring->reset(reset);
 
+	// Initialize BMAC Controller for bidirectional token management
+	bmac_controller = new BMACController("bmac_controller");
+	bmac_controller->clock(clock);
+	bmac_controller->reset(reset);
+
+	// Connect BMAC Controller to TokenRing
+	token_ring->setBMACController(bmac_controller);
+
 
 	char channel_name[16];
 	for (map<int, ChannelConfig>::iterator it = GlobalParams::channel_configuration.begin();
