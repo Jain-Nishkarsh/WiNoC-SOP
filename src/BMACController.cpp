@@ -35,9 +35,26 @@ void BMACController::initializeBMAC()
             vector<int> hub_order;
             
             // Get hub order from global configuration
-            // For the DA-BMAC configuration, we use the token_ring_order from config
-            // Default order: [0,1,2,3,7,6,5,9,10,11,15,14,13,12,8,4]
-            hub_order = {0,1,2,3,7,6,5,9,10,11,15,14,13,12,8,4};
+            // Use the token_ring_order from the channel configuration
+            if (config.tokenRingOrder.size() > 0)
+            {
+                hub_order = config.tokenRingOrder;
+                LOG << "BMAC Controller: Using token ring order from configuration for channel " 
+                    << channel << ": ";
+                for (size_t i = 0; i < hub_order.size(); i++)
+                {
+                    LOG << hub_order[i];
+                    if (i < hub_order.size() - 1) LOG << ",";
+                }
+                LOG << endl;
+            }
+            else
+            {
+                // Fallback to default order if not specified in config
+                hub_order = {0,1,2,3,7,6,5,9,10,11,15,14,13,12,8,4};
+                LOG << "BMAC Controller: Using default token ring order for channel " 
+                    << channel << " (no order specified in config)" << endl;
+            }
             
             configureBMACRing(channel, hub_order);
             enableBidirectionalMode(channel, true);
