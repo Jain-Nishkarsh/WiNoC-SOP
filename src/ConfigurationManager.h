@@ -64,6 +64,7 @@ namespace YAML {
             node["ber"] = channelConfig.ber;
             node["data_rate"] = channelConfig.dataRate;
             node["mac_policy"] = channelConfig.macPolicy;
+            node["token_ring_order"] = channelConfig.tokenRingOrder;
             return node;
         }
 
@@ -71,6 +72,7 @@ namespace YAML {
             channelConfig.ber = node["ber"].as<pair<double, double> >(GlobalParams::default_channel_configuration.ber);
             channelConfig.dataRate = node["data_rate"].as<int>(GlobalParams::default_channel_configuration.dataRate);
             channelConfig.macPolicy = node["mac_policy"].as<vector<string> >(GlobalParams::default_channel_configuration.macPolicy);
+            channelConfig.tokenRingOrder = node["token_ring_order"].as<vector<int> >(GlobalParams::default_channel_configuration.tokenRingOrder);
             return true;
         }
     };

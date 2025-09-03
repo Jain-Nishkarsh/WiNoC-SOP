@@ -95,6 +95,7 @@ typedef struct {
     pair<double, double> ber;
     int dataRate;
     vector<string> macPolicy;
+    vector<int> tokenRingOrder;
 } ChannelConfig;
 
 typedef struct {
