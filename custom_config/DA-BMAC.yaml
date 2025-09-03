@@ -10,6 +10,10 @@ r2h_link_length: 2.0
 r2r_link_length: 1.0
 n_virtual_channels: 1
 
+min_packet_size: 8
+max_packet_size: 8
+packet_injection_rate: 0.0001
+
 # Use custom distance-aware routing
 routing_algorithm: DA_BMAC
 routing_table_filename: ""
@@ -17,13 +21,8 @@ routing_table_filename: ""
 # Distance threshold for wireless vs wired routing decision
 da_threshold: 5
 
-selection_strategy: RANDOM
-
-# Additional simulation parameters
-probability_of_retransmission: 0.01
-locality: 0.0
-traffic_table_filename: ""
-dyad_threshold: 0.6
+#(Neighbors-on-Path): Prioritizes paths closer to the destination.
+selection_strategy: NOP
 
 # WIRELESS CONFIGURATION - 16 radio hubs in 4x4 configuration
 use_winoc: true
@@ -39,7 +38,7 @@ Hubs:
         rx_buffer_size: 4
         tx_buffer_size: 4
         # BMAC specific parameters  
-        token_hold_cycles: 15
+        token_hold_cycles: 8
 
     # Hub 0: covers tiles (0,0), (0,1), (1,0), (1,1) - nodes 0,1,8,9
     0:
@@ -145,15 +144,11 @@ verbose_mode: VERBOSE_HIGH
 trace_mode: false
 trace_filename: ""
 
-min_packet_size: 8
-max_packet_size: 8
-packet_injection_rate: 0.03
-
-
 # Traffic patterns for validation
 traffic_distribution: TRAFFIC_RANDOM
 # Alternative patterns for testing:
 # TRAFFIC_TRANSPOSE1, TRAFFIC_SHUFFLE, TRAFFIC_HOTSPOT
+traffic_table_filename: "t.txt"
 
 # Energy model parameters
 enable_power_analysis: true
@@ -162,3 +157,6 @@ wireless_rx_power_mw: 0.3
 wireless_idle_power_mw: 0.1
 router_power_mw: 8.75
 link_power_mw: 0.5
+
+dyad_threshold: 0.6
+probability_of_retransmission: 0.01
