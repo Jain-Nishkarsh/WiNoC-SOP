@@ -89,7 +89,6 @@ using namespace std;
 #define TOKEN_HOLD             "TOKEN_HOLD"
 #define TOKEN_MAX_HOLD         "TOKEN_MAX_HOLD"
 #define TOKEN_PACKET           "TOKEN_PACKET"
-#define BMAC_BIDIRECTIONAL     "BMAC_BIDIRECTIONAL"
 
 typedef struct {
     pair<double, double> ber;

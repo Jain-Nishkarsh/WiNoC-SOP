@@ -18,7 +18,6 @@
 #include "Hub.h"
 #include "Channel.h"
 #include "TokenRing.h"
-#include "BMACController.h"
 
 using namespace std;
 
@@ -83,7 +82,6 @@ SC_MODULE(NoC)
     map<int, Channel*> channel;
 
     TokenRing* token_ring;
-    BMACController* bmac_controller;
 
     // Global tables
     GlobalRoutingTable grtable;
