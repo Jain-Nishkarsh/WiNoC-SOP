@@ -18,13 +18,15 @@
 
 using namespace std;
 
-// Forward declaration
-struct BMACController;
-
 SC_MODULE(TokenRing)
 {
     SC_HAS_PROCESS(TokenRing);
 
+    // Constructor
+    TokenRing(sc_module_name name) : sc_module(name) {
+        SC_METHOD(updateTokens);
+        sensitive << clock.pos();
+    }
 
     // I/O Ports
     sc_in_clk clock;	
@@ -44,28 +46,6 @@ SC_MODULE(TokenRing)
 
     void updateTokens();
 
-    // BMAC Controller reference for bidirectional token management
-    BMACController* bmac_controller;
-    void setBMACController(BMACController* controller);
-
-    TokenRing(sc_module_name nm): sc_module(nm) {
-        bmac_controller = nullptr;
-
-
-	if (GlobalParams::use_winoc)
-	{
-	    SC_METHOD(updateTokens);
-	    sensitive << reset;
-	    sensitive << clock.pos();
-	}
-
-        for (map<int, ChannelConfig>::iterator i = GlobalParams::channel_configuration.begin(); 
-                i != GlobalParams::channel_configuration.end();
-                ++i) {
-            token_policy[i->first] = make_pair(i->second.macPolicy[0], i->second.macPolicy); 
-        }
-    }
-
     pair<string, vector<string> > getPolicy(int channel) { return token_policy[channel];}
 
     private:
@@ -73,7 +53,6 @@ SC_MODULE(TokenRing)
     void updateTokenMaxHold(int channel);
     void updateTokenHold(int channel);
     void updateTokenPacket(int channel);
-    void updateTokenBMAC(int channel);
 
     // ring of a channel -> list of pairs < hubs , hold counts >
     map<int,vector<int> > rings_mapping;

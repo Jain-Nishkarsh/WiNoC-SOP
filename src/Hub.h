@@ -196,7 +196,6 @@ SC_MODULE(Hub)
     void txRadioProcessTokenPacket(int channel);
     void txRadioProcessTokenHold(int channel);
     void txRadioProcessTokenMaxHold(int channel);
-    void txRadioProcessBMAC(int channel);
 
     void rxPowerManager();
     void txPowerManager();

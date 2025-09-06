@@ -391,10 +391,10 @@ vector<int> Router::nextDeltaHops(RouteData rd) {
 
 vector < int > Router::routingFunction(const RouteData & route_data)
 {
-	// Check if we're using DA_BMAC routing algorithm
-	if (GlobalParams::routing_algorithm == "DA_BMAC")
+	// Check if we're using DISTANCE_AWARE routing algorithm
+	if (GlobalParams::routing_algorithm == "DISTANCE_AWARE")
 	{
-		// Let DA_BMAC algorithm make the wireless vs wired decision
+		// Let DISTANCE_AWARE algorithm make the wireless vs wired decision
 		return routingAlgorithm->route(this, route_data);
 	}
 	

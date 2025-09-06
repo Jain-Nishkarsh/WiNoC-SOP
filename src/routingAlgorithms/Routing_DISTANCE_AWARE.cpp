@@ -1,17 +1,17 @@
-#include "Routing_DA_BMAC.h"
+#include "Routing_DISTANCE_AWARE.h"
 
-RoutingAlgorithmsRegister Routing_DA_BMAC::routingAlgorithmsRegister("DA_BMAC", getInstance());
+RoutingAlgorithmsRegister Routing_DISTANCE_AWARE::routingAlgorithmsRegister("DISTANCE_AWARE", getInstance());
 
-Routing_DA_BMAC * Routing_DA_BMAC::routing_DA_BMAC = 0;
-RoutingAlgorithm * Routing_DA_BMAC::xy = 0;
+Routing_DISTANCE_AWARE * Routing_DISTANCE_AWARE::routing_distance_aware = 0;
+RoutingAlgorithm * Routing_DISTANCE_AWARE::xy = 0;
 
-Routing_DA_BMAC * Routing_DA_BMAC::getInstance() {
-    if (routing_DA_BMAC == 0)
-        routing_DA_BMAC = new Routing_DA_BMAC();
-    return routing_DA_BMAC;
+Routing_DISTANCE_AWARE * Routing_DISTANCE_AWARE::getInstance() {
+    if (routing_distance_aware == 0)
+        routing_distance_aware = new Routing_DISTANCE_AWARE();
+    return routing_distance_aware;
 }
 
-vector<int> Routing_DA_BMAC::route(Router * router, const RouteData& route_data)
+vector<int> Routing_DISTANCE_AWARE::route(Router * router, const RouteData& route_data)
 {
     vector<int> directions;
     int current_id = route_data.current_id;
@@ -42,7 +42,7 @@ vector<int> Routing_DA_BMAC::route(Router * router, const RouteData& route_data)
     return routeXY(route_data);
 }
 
-vector<int> Routing_DA_BMAC::routeXY(const RouteData& route_data)
+vector<int> Routing_DISTANCE_AWARE::routeXY(const RouteData& route_data)
 {
     // Use existing XY routing algorithm for wired routing
     if (!xy) {
@@ -55,7 +55,7 @@ vector<int> Routing_DA_BMAC::routeXY(const RouteData& route_data)
     return xy->route(NULL, route_data);
 }
 
-int Routing_DA_BMAC::getWirelessDirection(int current_id, int destination_id)
+int Routing_DISTANCE_AWARE::getWirelessDirection(int current_id, int destination_id)
 {
     // Check if current node has access to wireless hub
     int current_hub_id = getHubId(current_id);
@@ -71,7 +71,7 @@ int Routing_DA_BMAC::getWirelessDirection(int current_id, int destination_id)
     return NOT_VALID;
 }
 
-int Routing_DA_BMAC::getHubId(int node_id)
+int Routing_DISTANCE_AWARE::getHubId(int node_id)
 {
     // Based on the 8x8 mesh with 16 hubs configuration
     // Each hub covers a 2x2 area of tiles
@@ -86,7 +86,7 @@ int Routing_DA_BMAC::getHubId(int node_id)
     return NOT_VALID;
 }
 
-bool Routing_DA_BMAC::canHubsCommunicate(int hub1_id, int hub2_id)
+bool Routing_DISTANCE_AWARE::canHubsCommunicate(int hub1_id, int hub2_id)
 {
     // In single channel configuration, all hubs can communicate
     // For multi-channel, check channel assignments
@@ -97,7 +97,7 @@ bool Routing_DA_BMAC::canHubsCommunicate(int hub1_id, int hub2_id)
 }
 
 // Utility functions
-Coord Routing_DA_BMAC::id2Coord(int id)
+Coord Routing_DISTANCE_AWARE::id2Coord(int id)
 {
     Coord coord;
     coord.x = id % GlobalParams::mesh_dim_x;
@@ -105,7 +105,7 @@ Coord Routing_DA_BMAC::id2Coord(int id)
     return coord;
 }
 
-int Routing_DA_BMAC::coord2Id(const Coord& coord)
+int Routing_DISTANCE_AWARE::coord2Id(const Coord& coord)
 {
     return coord.y * GlobalParams::mesh_dim_x + coord.x;
 }

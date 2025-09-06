@@ -9,7 +9,6 @@
  */
 
 #include "TokenRing.h"
-#include "BMACController.h"
 
 void TokenRing::updateTokenPacket(int channel)
 {
@@ -94,8 +93,6 @@ void TokenRing::updateTokens()
                 updateTokenHold(channel);
             else if (macPolicy == TOKEN_MAX_HOLD)
                 updateTokenMaxHold(channel);
-            else if (macPolicy == BMAC_BIDIRECTIONAL)
-                updateTokenBMAC(channel);
             else
                 assert(false);
         }
@@ -125,8 +122,7 @@ void TokenRing::attachHub(int channel, int hub, sc_in<int>* hub_token_holder_por
         token_hold_count[channel] = 0;
 
 
-        if (GlobalParams::channel_configuration[channel].macPolicy[0] != TOKEN_PACKET &&
-            GlobalParams::channel_configuration[channel].macPolicy[0] != BMAC_BIDIRECTIONAL) {
+        if (GlobalParams::channel_configuration[channel].macPolicy[0] != TOKEN_PACKET) {
             // checking max hold cycles vs wireless transmission latency
             // consistency
             //TODO move this check: max_hold_cycles depends on the Channel not on the Hub
@@ -136,10 +132,6 @@ void TokenRing::attachHub(int channel, int hub, sc_in<int>* hub_token_holder_por
             assert(cycles< max_hold_cycles);
 
             token_hold_count[channel] = atoi(GlobalParams::channel_configuration[channel].macPolicy[1].c_str());
-        }
-        else if (GlobalParams::channel_configuration[channel].macPolicy[0] == BMAC_BIDIRECTIONAL) {
-            // BMAC specific initialization - use reasonable token hold time
-            token_hold_count[channel] = 10; // Allow sufficient time for packet transmission
         }
     }
 
@@ -159,48 +151,3 @@ void TokenRing::attachHub(int channel, int hub, sc_in<int>* hub_token_holder_por
     int starting_hub = rings_mapping[channel][0];
     current_token_holder[channel]->write(starting_hub);
 }
-
-void TokenRing::updateTokenBMAC(int channel)
-{
-    // Use BMACController for bidirectional token management if available
-    if (bmac_controller != nullptr)
-    {
-        // Let BMACController handle token passing decisions
-        // The controller will manage the bidirectional logic
-        // and communicate back to us via current_token_holder updates
-        
-        // For now, we just check if the token holder has changed
-        // The actual logic is handled in BMACController::bmacProcess()
-        return;
-    }
-    
-    // Fallback to simplified BMAC implementation
-    int token_pos = token_position[channel];
-    int token_holder = rings_mapping[channel][token_pos];
-    
-    // Check if token should be passed (simplified logic)
-    if (flag[channel][token_holder]->read() == RELEASE_CHANNEL)
-    {
-        // Implement bidirectional token passing
-        // For now, use standard clockwise passing
-        
-        int num_hubs = rings_mapping[channel].size();
-        token_position[channel] = (token_position[channel] + 1) % num_hubs;
-        
-        int new_token_holder = rings_mapping[channel][token_position[channel]];
-        
-        LOG << "*** BMAC Token for channel " << channel 
-            << " passed from Hub " << token_holder 
-            << " to Hub " << new_token_holder << endl;
-            
-        current_token_holder[channel]->write(new_token_holder);
-        flag[channel][new_token_holder]->write(HOLD_CHANNEL);
-    }
-}
-
-void TokenRing::setBMACController(BMACController* controller)
-{
-    bmac_controller = controller;
-}
-
-

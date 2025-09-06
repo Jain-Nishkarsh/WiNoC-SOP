@@ -15,7 +15,7 @@ max_packet_size: 8
 packet_injection_rate: 0.0001
 
 # Use custom distance-aware routing
-routing_algorithm: DA_BMAC
+routing_algorithm: DISTANCE_AWARE
 routing_table_filename: ""
 
 # Distance threshold for wireless vs wired routing decision
@@ -127,7 +127,7 @@ RadioChannels:
         frequency_ghz: 60
         ber: [0, 0]
         # BMAC bidirectional token protocol
-        mac_policy: [BMAC_BIDIRECTIONAL]
+        mac_policy: [TOKEN_PACKET]
         token_ring_order: [0,1,2,3,7,6,5,9,10,11,15,14,13,12,8,4]
 
 # SIMULATION PARAMETERS
