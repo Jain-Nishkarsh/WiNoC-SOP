@@ -38,14 +38,21 @@ void ProcessingElement::txProcess()
 	transmittedAtPreviousCycle = false;
     injected_flits = 0;
     } else {
-	Packet packet;
 
-	if (canShot(packet)) {
-	    packet_queue.push(packet);
-	    transmittedAtPreviousCycle = true;
-        injected_flits += packet.size;
-	} else
-	    transmittedAtPreviousCycle = false;
+      if(GlobalParams::traffic_distribution != TRAFFIC_HARDCODED) {
+		Packet packet;
+		if (canShot(packet)) {
+		  packet_queue.push(packet);
+		  transmittedAtPreviousCycle = true;
+          injected_flits += packet.size;
+		} else {
+		  transmittedAtPreviousCycle = false;
+		}
+      } else {
+		std::cout << "[txProcess] check for ID " << local_id << " at cycle " << traffic_cycle << std::endl;
+		
+		traffic_cycle += 1;
+      }
 
 
 	if (ack_tx.read() == current_level_tx) {

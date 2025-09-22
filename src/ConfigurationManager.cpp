@@ -83,7 +83,6 @@ void loadConfiguration() {
     GlobalParams::probability_of_retransmission = readParam<double>(config, "probability_of_retransmission");
     GlobalParams::traffic_distribution = readParam<string>(config, "traffic_distribution");
     GlobalParams::traffic_table_filename = readParam<string>(config, "traffic_table_filename");
-
     // Soteriou Traffic Configuration
     GlobalParams::traffic_soteriou_sigma = readParam<double>(config, "traffic_soteriou_sigma", 0.0);
     GlobalParams::traffic_soteriou_hurst = readParam<double>(config, "traffic_soteriou_hurst", 0.0);
@@ -103,6 +102,7 @@ void loadConfiguration() {
         GlobalParams::traffic_soteriou_hotspot = make_pair(0, 0);
     }
 
+    GlobalParams::traffic_hardcoded_filename = readParam<string>(config, "traffic_hardcoded_filename");
     GlobalParams::clock_period_ps = readParam<int>(config, "clock_period_ps");
     GlobalParams::simulation_time = readParam<int>(config, "simulation_time");
     GlobalParams::n_virtual_channels = readParam<int>(config, "n_virtual_channels");
@@ -599,6 +599,10 @@ void parseCmdLine(int arg_num, char *arg_vet[])
 		    GlobalParams::traffic_distribution =
 			TRAFFIC_TABLE_BASED;
 		    GlobalParams::traffic_table_filename = arg_vet[++i];
+		} else if (!strcmp(traffic, "hardcoded")) {
+		    GlobalParams::traffic_distribution =
+			TRAFFIC_HARDCODED;
+		    GlobalParams::traffic_hardcoded_filename = arg_vet[++i];
 		} else if (!strcmp(traffic, "local")) {
 		    GlobalParams::traffic_distribution = TRAFFIC_LOCAL;
 		    GlobalParams::locality=atof(arg_vet[++i]);
