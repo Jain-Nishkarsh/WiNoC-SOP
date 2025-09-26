@@ -1,0 +1,6 @@
+/bin/libs/
+/bin/build/
+noxim
+.DS_Store
+results/
+.vscode
