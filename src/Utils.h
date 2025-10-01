@@ -73,6 +73,12 @@ inline ostream & operator <<(ostream & os, const Flit & flit)
 	case FLIT_TYPE_TAIL:
 	    os << "Flit Type is TAIL" << endl;
 	    break;
+	case FLIT_TYPE_PREAMBLE:
+	    os << "Flit Type is PREAMBLE" << endl;
+	    break;
+	case FLIT_TYPE_NACK:
+	    os << "Flit Type is NACK" << endl;
+	    break;
 	}
 	os << "Sequence no. " << flit.sequence_no << endl;
 	os << "Payload printing not implemented (yet)." << endl;
@@ -91,6 +97,12 @@ inline ostream & operator <<(ostream & os, const Flit & flit)
 	    break;
 	case FLIT_TYPE_TAIL:
 	    os << "T";
+	    break;
+	case FLIT_TYPE_PREAMBLE:
+	    os << "P";
+	    break;
+	case FLIT_TYPE_NACK:
+	    os << "N";
 	    break;
 	}
 

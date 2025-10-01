@@ -55,7 +55,7 @@ void NoC::buildCommon()
 			++iit)
 		{
 			GlobalParams::hub_for_tile[*iit] = hub_id;
-			//LOG<<"I am hub "<<hub_id<<" and I amconnecting to "<<*iit<<endl;
+			cout << "Hub " << hub_id << " attached to node " << *iit << endl;
 
 		}
 		//for (map<int, int>::iterator it1 = GlobalParams::hub_for_tile.begin(); it1 != GlobalParams::hub_for_tile.end(); it1++ )

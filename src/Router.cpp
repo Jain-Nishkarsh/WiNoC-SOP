@@ -409,7 +409,8 @@ vector < int > Router::routingFunction(const RouteData & route_data)
 		// node I and the destination D.
 		// - NOTE: default threshold is 0, which means I=D, i.e., we explicitly ask the destination D to be connected to the
 		// target radio hub
-		if (hasRadioHub(local_id))
+		bool hasHub = hasRadioHub(local_id);
+		if (hasHub)
 		{
 			// Check if destination is directly connected to an hub
 			if ( hasRadioHub(route_data.dst_id) &&
@@ -420,7 +421,8 @@ vector < int > Router::routingFunction(const RouteData & route_data)
 
                 if (connectedHubs(it1->second,it2->second))
                 {
-                    LOG << "Destination node " << route_data.dst_id << " is directly connected to a reachable RadioHub" << endl;
+                    if (GlobalParams::verbose_mode >= VERBOSE_MEDIUM)
+                        LOG << "**WIRELESS** Node " << local_id << " routing to " << route_data.dst_id << " via RadioHub" << endl;
                     vector<int> dirv;
                     dirv.push_back(DIRECTION_HUB);
                     return dirv;

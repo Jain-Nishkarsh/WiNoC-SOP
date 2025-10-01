@@ -58,6 +58,25 @@ namespace YAML {
     };
     
     template<>
+    struct convert<FuzzyTokenConfig> {
+        static bool decode(const Node& node, FuzzyTokenConfig& config) {
+            config.preamble_cycles = node["preamble_cycles"].as<int>(1);
+            config.collision_detect_cycles = node["collision_detect_cycles"].as<int>(2);
+            config.silence_cycles = node["silence_cycles"].as<int>(1);
+            config.thr1 = node["thr1"].as<double>(0.1);
+            config.thr2 = node["thr2"].as<double>(0.9);
+            config.initial_FA = node["initial_FA"].as<int>(10);
+            config.FA_increment = node["FA_increment"].as<int>(1);
+            config.FA_decrement_factor = node["FA_decrement_factor"].as<double>(0.5);
+            config.pi_type = node["pi_type"].as<string>("equal");
+            config.initial_token_holder = node["initial_token_holder"].as<int>(0);
+            config.token_order = node["token_order"].as<string>("static");
+            config.thr_is_percentage = node["thr_is_percentage"].as<bool>(true);
+            return true;
+        }
+    };
+    
+    template<>
     struct convert<ChannelConfig> {
         static Node encode(const ChannelConfig& channelConfig) {
             Node node;
@@ -73,6 +92,12 @@ namespace YAML {
             channelConfig.dataRate = node["data_rate"].as<int>(GlobalParams::default_channel_configuration.dataRate);
             channelConfig.macPolicy = node["mac_policy"].as<vector<string> >(GlobalParams::default_channel_configuration.macPolicy);
             channelConfig.tokenRingOrder = node["token_ring_order"].as<vector<int> >(GlobalParams::default_channel_configuration.tokenRingOrder);
+            
+            // Parse fuzzy_token configuration if mac_policy includes FUZZY_TOKEN
+            if (node["fuzzy_token"]) {
+                channelConfig.fuzzyTokenConfig = node["fuzzy_token"].as<FuzzyTokenConfig>();
+            }
+            
             return true;
         }
     };

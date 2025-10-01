@@ -89,12 +89,30 @@ using namespace std;
 #define TOKEN_HOLD             "TOKEN_HOLD"
 #define TOKEN_MAX_HOLD         "TOKEN_MAX_HOLD"
 #define TOKEN_PACKET           "TOKEN_PACKET"
+#define FUZZY_TOKEN            "FUZZY_TOKEN"
+
+// Fuzzy Token configuration
+typedef struct {
+    int preamble_cycles;        // Cycles for preamble phase (default: 1)
+    int collision_detect_cycles; // Cycles for collision detection (default: 2)
+    int silence_cycles;         // Cycles for silence (default: 1)
+    double thr1;                // Lower threshold for mode switch (fraction of N or absolute)
+    double thr2;                // Upper threshold for mode switch (fraction of N or absolute)
+    int initial_FA;             // Initial fuzzy area size
+    int FA_increment;           // Additive increase on silence (default: 1)
+    double FA_decrement_factor; // Multiplicative decrease on collision (default: 0.5)
+    string pi_type;             // Probability distribution type: "equal" or "gaussian"
+    int initial_token_holder;   // Initial token holder node ID
+    string token_order;         // Token order: "static" or "pseudo_random"
+    bool thr_is_percentage;     // True if thr1/thr2 are percentages of N
+} FuzzyTokenConfig;
 
 typedef struct {
     pair<double, double> ber;
     int dataRate;
     vector<string> macPolicy;
     vector<int> tokenRingOrder;
+    FuzzyTokenConfig fuzzyTokenConfig;
 } ChannelConfig;
 
 typedef struct {

@@ -26,7 +26,8 @@ class Coord {
 
 // FlitType -- Flit type enumeration
 enum FlitType {
-    FLIT_TYPE_HEAD, FLIT_TYPE_BODY, FLIT_TYPE_TAIL
+    FLIT_TYPE_HEAD, FLIT_TYPE_BODY, FLIT_TYPE_TAIL,
+    FLIT_TYPE_PREAMBLE, FLIT_TYPE_NACK
 };
 
 // Payload -- Payload definition

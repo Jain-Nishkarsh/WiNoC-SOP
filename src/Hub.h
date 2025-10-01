@@ -21,6 +21,8 @@
 #include "Target.h"
 #include "TokenRing.h"
 #include "Power.h"
+#include "FuzzyTokenController.h"
+#include "FuzzyTokenNode.h"
 
 using namespace std;
 
@@ -196,11 +198,22 @@ SC_MODULE(Hub)
     void txRadioProcessTokenPacket(int channel);
     void txRadioProcessTokenHold(int channel);
     void txRadioProcessTokenMaxHold(int channel);
+    void txRadioProcessFuzzyToken(int channel);
 
     void rxPowerManager();
     void txPowerManager();
 
     int selectChannel(int src, int dst) const ;
+    
+    // Fuzzy Token support
+    map<int, FuzzyTokenNode*> fuzzyTokenNodes; // channel -> FuzzyTokenNode
+    map<int, int> fuzzyTokenStepCycles; // channel -> current step cycle count
+    map<int, bool> fuzzyTokenPreambleDetected; // channel -> multiple preambles detected
+    map<int, int> fuzzyTokenActiveTransmitters; // channel -> count of active preambles
+    
+    void initializeFuzzyToken(int channel);
+    bool detectMultiplePreambles(int channel);
+    void sendNack(int channel);
 };
 
 #endif
