@@ -14,6 +14,7 @@
 #include <systemc.h>
 #include <vector>
 #include <map>
+#include <set>
 #include <bitset>
 #include "GlobalParams.h"
 #include "DataStructs.h"
@@ -58,6 +59,10 @@ public:
     int totalFuzzySteps;
     int totalFocusedSteps;
     
+    // Global transmission tracking (for broadcast collision detection)
+    int activeTransmittersThisStep;
+    set<int> transmittingHubsThisStep;
+    
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -69,7 +74,8 @@ public:
         totalSuccesses(0),
         totalSilences(0),
         totalFuzzySteps(0),
-        totalFocusedSteps(0)
+        totalFocusedSteps(0),
+        activeTransmittersThisStep(0)
     {
         fuzzyArea.reset();
     }
@@ -83,6 +89,13 @@ public:
     bool isInFuzzyArea(int nodeId) const;
     int getTokenHolder() const { return tokenID; }
     FuzzyTokenMode getMode() const { return periodMode; }
+    
+    // Global transmission tracking methods
+    void registerTransmission(int hubId);
+    void resetStepState();
+    bool hasCollision() const { return activeTransmittersThisStep > 1; }
+    bool hasSilence() const { return activeTransmittersThisStep == 0; }
+    int getActiveTransmitters() const { return activeTransmittersThisStep; }
 };
 
 // Global Fuzzy Token Controller (manages all channels)

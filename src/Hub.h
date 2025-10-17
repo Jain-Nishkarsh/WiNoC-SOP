@@ -191,6 +191,18 @@ SC_MODULE(Hub)
 
 
     int getID() { return local_id;}
+    
+    // Called by Initiator when TAIL flit is successfully transmitted
+    void completeFuzzyTokenTransmission(int channel);
+    
+    // Check if channel uses FUZZY_TOKEN MAC
+    bool isFuzzyTokenChannel(int channel);
+    
+    // Check if this hub is the token holder for given channel
+    bool isTokenHolderForChannel(int channel);
+    
+    // Handle collision detection for AIMD
+    void handleFuzzyTokenCollision(int channel);
 
     private:
     map<int,int> flit_transmission_cycles;
@@ -210,6 +222,8 @@ SC_MODULE(Hub)
     map<int, int> fuzzyTokenStepCycles; // channel -> current step cycle count
     map<int, bool> fuzzyTokenPreambleDetected; // channel -> multiple preambles detected
     map<int, int> fuzzyTokenActiveTransmitters; // channel -> count of active preambles
+    map<int, int> fuzzyTokenStepStartCycle; // channel -> cycle when current step started (Option 2)
+    map<int, bool> fuzzyTokenTransmissionThisStep; // channel -> any transmission in current step (Option 2)
     
     void initializeFuzzyToken(int channel);
     bool detectMultiplePreambles(int channel);

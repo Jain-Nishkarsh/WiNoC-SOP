@@ -14,6 +14,14 @@
 #include <cstdlib>
 
 bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
+    static int call_count = 0;
+    call_count++;
+    
+    if (call_count <= 20 || call_count % 1000 == 0) {
+        cerr << "[SHOULD-TX-CHECK #" << call_count << "] Node " << nodeId 
+             << " hasData=" << hasData << endl;
+    }
+    
     if (!hasData) return false;
     
     FuzzyTokenChannelState* state = controller.getChannelState(channelId);
@@ -31,6 +39,15 @@ bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
         }
         
         double p = state->getTransmissionProbability(nodeId);
+        
+        // OPTION 1 FIX: Significantly increase probability for nodes with data
+        // Original p=1/FA_size is too low (6.25% for 16 nodes)
+        // Boost to configured minimum to enable actual transmission
+        double min_p = state->config.min_transmission_prob;
+        if (hasData && p < min_p) {
+            p = min_p;  // Use configured minimum probability
+        }
+        
         double rand_val = (double)rand() / RAND_MAX;
         
         return (rand_val < p);

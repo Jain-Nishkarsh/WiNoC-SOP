@@ -100,9 +100,14 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
     // Update transmission probabilities
     updateTransmissionProbabilities();
     
-    if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldFA != FA_size) {
-        cout << "FA updated: " << oldFA << " -> " << FA_size 
-             << " (outcome=" << outcome << ")" << endl;
+    if (oldFA != FA_size) {
+        static int fa_change_count = 0;
+        fa_change_count++;
+        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+        cerr << "[AIMD-FA-UPDATE #" << fa_change_count << "] FA_size: " << oldFA << " -> " << FA_size 
+             << " (outcome=" << outcome_str << ", collisions=" << totalCollisions 
+             << ", successes=" << totalSuccesses << ", silences=" << totalSilences << ")" << endl;
     }
 }
 
@@ -188,7 +193,15 @@ double FuzzyTokenChannelState::getTransmissionProbability(int nodeId) const {
 
 bool FuzzyTokenChannelState::isInFuzzyArea(int nodeId) const {
     if (nodeId < 0 || nodeId >= MAX_FUZZY_TOKEN_NODES) return false;
-    return fuzzyArea.test(nodeId);
+    bool result = fuzzyArea.test(nodeId);
+    
+    static int check_count = 0;
+    if (++check_count % 1000 == 0 && GlobalParams::verbose_mode >= VERBOSE_LOW) {
+        cerr << "[FUZZY-AREA-CHECK] nodeId=" << nodeId << " in FA? " << result 
+             << " (FA_size=" << FA_size << ", tokenID=" << tokenID << ")" << endl;
+    }
+    
+    return result;
 }
 
 // FuzzyTokenController implementation
@@ -220,6 +233,16 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     FuzzyTokenChannelState* state = getChannelState(channelId);
     if (!state) return;
     
+    // Log step end with transmission info
+    static int step_count = 0;
+    step_count++;
+    const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                              (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+    cerr << "[STEP-END #" << step_count << "] Channel " << channelId 
+         << " outcome=" << outcome_str
+         << ", active_transmitters=" << state->activeTransmittersThisStep
+         << ", FA_size=" << state->FA_size << endl;
+    
     // Update fuzzy area based on outcome
     state->updateFuzzyArea(outcome);
     
@@ -228,6 +251,9 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     
     // Check for mode switch
     state->switchMode();
+    
+    // Reset transmission counters for next step
+    state->resetStepState();
     
     // Update step cycle count
     state->currentStepCycles = stepCycles;
@@ -253,4 +279,20 @@ void FuzzyTokenController::printStats(int channelId) {
     cout << "Final FA Size: " << state->FA_size << endl;
     cout << "Final Mode: " << (state->periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << endl;
     cout << "=================================================\n" << endl;
+}
+
+// Global transmission tracking methods
+void FuzzyTokenChannelState::registerTransmission(int hubId) {
+    transmittingHubsThisStep.insert(hubId);
+    activeTransmittersThisStep = transmittingHubsThisStep.size();
+    
+    static int register_count = 0;
+    register_count++;
+    cerr << "[PREAMBLE-REGISTERED #" << register_count << "] Hub " << hubId 
+         << " registered transmission (total active: " << activeTransmittersThisStep << ")" << endl;
+}
+
+void FuzzyTokenChannelState::resetStepState() {
+    transmittingHubsThisStep.clear();
+    activeTransmittersThisStep = 0;
 }

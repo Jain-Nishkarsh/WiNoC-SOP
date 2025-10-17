@@ -9,6 +9,12 @@
  */
 #include "Hub.h"
 #include "Initiator.h"
+#include "FuzzyTokenController.h"
+#include "GlobalParams.h"
+
+static int total_wireless_tx_attempts = 0;
+static int total_wireless_tx_success = 0;
+static int total_wireless_tx_errors = 0;
 
 void Initiator::thread_process()
 {
@@ -54,6 +60,12 @@ void Initiator::thread_process()
 
 
 		LOG << " *** Starting transmission of " << flit_payload << " to reach HUB_" << destHub <<  endl;
+		total_wireless_tx_attempts++;
+		
+		cerr << "[INITIATOR-TX #" << total_wireless_tx_attempts << "] Hub " << hub->local_id 
+		     << " sending flit: type=" << flit_payload.flit_type 
+		     << ", src=" << flit_payload.src_id << ", dst=" << flit_payload.dst_id 
+		     << ", seq=" << flit_payload.sequence_no << " to Hub " << destHub << endl;
 
 		trans->set_command(cmd);
 		trans->set_address(static_cast<const uint64>(destHub));
@@ -75,22 +87,54 @@ void Initiator::thread_process()
 		// Initiator obliged to check response status and delay
 		if (!trans->is_response_error() )
 		{
+			total_wireless_tx_success++;
+			cerr << "[TX-SUCCESS] Hub " << hub->local_id << " sent flit type=" << flit_payload.flit_type 
+			     << " (HEAD=" << FLIT_TYPE_HEAD << ", BODY=" << FLIT_TYPE_BODY << ", TAIL=" << FLIT_TYPE_TAIL << ")" << endl;
+			if (flit_payload.flit_type == FLIT_TYPE_HEAD) {
+				cerr << "[TX-OK] Hub " << hub->local_id << " successfully sent HEAD flit (src=" << flit_payload.src_id 
+				     << ", dst=" << flit_payload.dst_id << ", seq=" << flit_payload.sequence_no 
+				     << ") [Success #" << total_wireless_tx_success << "]" << endl;
+			}
 			buffer_tx.Pop();
 			hub->power.antennaBufferPop();
 
-			if (flit_payload.flit_type == FLIT_TYPE_HEAD)
+			if (flit_payload.flit_type == FLIT_TYPE_HEAD) {
 				hub->transmission_in_progress.at(_channel_id) = true;
+				cerr << "[INITIATOR-HEAD] Hub " << hub->local_id << " set transmission_in_progress=true for channel " << _channel_id << endl;
+			}
 
 			if (flit_payload.flit_type == FLIT_TYPE_TAIL)
 			{
 				LOG << "*** [Ch"<< _channel_id <<"] tail flit sent " << flit_payload << ", releasing token" << endl;
+				cerr << "[INIT-DEBUG] TAIL flit sent on channel " << _channel_id << endl;
 				hub->flag[_channel_id]->write(RELEASE_CHANNEL);
 				hub->transmission_in_progress.at(_channel_id) = false;
+				
+				// AIMD FIX: TAIL sent successfully = SUCCESS outcome
+				// Only signal from token holder to avoid multiple endStep() calls
+				if (hub->isFuzzyTokenChannel(_channel_id) && hub->isTokenHolderForChannel(_channel_id)) {
+					cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " (token holder) successfully sent TAIL on channel " 
+					     << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
+					hub->completeFuzzyTokenTransmission(_channel_id);
+				}
 			}
 		}
 		else
 		{
+			total_wireless_tx_errors++;
 			LOG << " WARNING: incomplete transaction " << endl;
+			cerr << "[TX-ERROR] Hub " << hub->local_id << " FAILED to send flit (src=" << flit_payload.src_id 
+			     << ", dst=" << flit_payload.dst_id << ", type=" << flit_payload.flit_type 
+			     << ", seq=" << flit_payload.sequence_no << ") to Hub " << destHub 
+			     << " [Error #" << total_wireless_tx_errors << "]" << endl;
+			
+			// AIMD FIX: TX-ERROR means buffer overflow/collision in AIMD terms
+			// Only signal from token holder to avoid multiple endStep() calls
+			if (hub->isFuzzyTokenChannel(_channel_id) && hub->isTokenHolderForChannel(_channel_id)) {
+				cerr << "[AIMD-COLLISION] Hub " << hub->local_id << " (token holder) detected TX-ERROR on channel " 
+				     << _channel_id << ", calling endStep(OUTCOME_COLLISION)" << endl;
+				hub->handleFuzzyTokenCollision(_channel_id);
+			}
 		}
 
 		//check_transaction( *trans );

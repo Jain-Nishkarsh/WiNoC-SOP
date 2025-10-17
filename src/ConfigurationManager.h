@@ -69,6 +69,7 @@ namespace YAML {
             config.FA_increment = node["FA_increment"].as<int>(1);
             config.FA_decrement_factor = node["FA_decrement_factor"].as<double>(0.5);
             config.pi_type = node["pi_type"].as<string>("equal");
+            config.min_transmission_prob = node["min_transmission_prob"].as<double>(0.4);  // Option 1 fix: default 40%
             config.initial_token_holder = node["initial_token_holder"].as<int>(0);
             config.token_order = node["token_order"].as<string>("static");
             config.thr_is_percentage = node["thr_is_percentage"].as<bool>(true);

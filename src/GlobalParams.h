@@ -102,6 +102,7 @@ typedef struct {
     int FA_increment;           // Additive increase on silence (default: 1)
     double FA_decrement_factor; // Multiplicative decrease on collision (default: 0.5)
     string pi_type;             // Probability distribution type: "equal" or "gaussian"
+    double min_transmission_prob; // Minimum transmission probability for nodes with data (Option 1 fix)
     int initial_token_holder;   // Initial token holder node ID
     string token_order;         // Token order: "static" or "pseudo_random"
     bool thr_is_percentage;     // True if thr1/thr2 are percentages of N

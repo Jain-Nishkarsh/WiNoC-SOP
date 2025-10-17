@@ -1,0 +1,150 @@
+# Quick Test Configuration for FUZZY_TOKEN
+# Small simulation for fast testing
+
+topology: MESH
+mesh_dim_x: 8
+mesh_dim_y: 8
+buffer_depth: 64
+flit_size: 32
+r2h_link_length: 2.0
+r2r_link_length: 1.0
+n_virtual_channels: 1
+
+routing_algorithm: DISTANCE_AWARE
+routing_table_filename: ""
+da_threshold: 5
+dyad_threshold: 0.6
+selection_strategy: RANDOM
+
+# 64 hubs (one per core) - same as full config
+Hubs:
+    defaults:
+        rx_radio_channels: [0]
+        tx_radio_channels: [0]
+        attached_nodes: []
+        to_tile_buffer_size: 32
+        from_tile_buffer_size: 32
+        rx_buffer_size: 64
+        tx_buffer_size: 64
+
+    # Row 0
+    0: { attached_nodes: [0], hub_position: [0.0, 0.0] }
+    1: { attached_nodes: [1], hub_position: [1.0, 0.0] }
+    2: { attached_nodes: [2], hub_position: [2.0, 0.0] }
+    3: { attached_nodes: [3], hub_position: [3.0, 0.0] }
+    4: { attached_nodes: [4], hub_position: [4.0, 0.0] }
+    5: { attached_nodes: [5], hub_position: [5.0, 0.0] }
+    6: { attached_nodes: [6], hub_position: [6.0, 0.0] }
+    7: { attached_nodes: [7], hub_position: [7.0, 0.0] }
+    
+    # Row 1
+    8: { attached_nodes: [8], hub_position: [0.0, 1.0] }
+    9: { attached_nodes: [9], hub_position: [1.0, 1.0] }
+    10: { attached_nodes: [10], hub_position: [2.0, 1.0] }
+    11: { attached_nodes: [11], hub_position: [3.0, 1.0] }
+    12: { attached_nodes: [12], hub_position: [4.0, 1.0] }
+    13: { attached_nodes: [13], hub_position: [5.0, 1.0] }
+    14: { attached_nodes: [14], hub_position: [6.0, 1.0] }
+    15: { attached_nodes: [15], hub_position: [7.0, 1.0] }
+    
+    # Row 2
+    16: { attached_nodes: [16], hub_position: [0.0, 2.0] }
+    17: { attached_nodes: [17], hub_position: [1.0, 2.0] }
+    18: { attached_nodes: [18], hub_position: [2.0, 2.0] }
+    19: { attached_nodes: [19], hub_position: [3.0, 2.0] }
+    20: { attached_nodes: [20], hub_position: [4.0, 2.0] }
+    21: { attached_nodes: [21], hub_position: [5.0, 2.0] }
+    22: { attached_nodes: [22], hub_position: [6.0, 2.0] }
+    23: { attached_nodes: [23], hub_position: [7.0, 2.0] }
+    
+    # Row 3
+    24: { attached_nodes: [24], hub_position: [0.0, 3.0] }
+    25: { attached_nodes: [25], hub_position: [1.0, 3.0] }
+    26: { attached_nodes: [26], hub_position: [2.0, 3.0] }
+    27: { attached_nodes: [27], hub_position: [3.0, 3.0] }
+    28: { attached_nodes: [28], hub_position: [4.0, 3.0] }
+    29: { attached_nodes: [29], hub_position: [5.0, 3.0] }
+    30: { attached_nodes: [30], hub_position: [6.0, 3.0] }
+    31: { attached_nodes: [31], hub_position: [7.0, 3.0] }
+    
+    # Row 4
+    32: { attached_nodes: [32], hub_position: [0.0, 4.0] }
+    33: { attached_nodes: [33], hub_position: [1.0, 4.0] }
+    34: { attached_nodes: [34], hub_position: [2.0, 4.0] }
+    35: { attached_nodes: [35], hub_position: [3.0, 4.0] }
+    36: { attached_nodes: [36], hub_position: [4.0, 4.0] }
+    37: { attached_nodes: [37], hub_position: [5.0, 4.0] }
+    38: { attached_nodes: [38], hub_position: [6.0, 4.0] }
+    39: { attached_nodes: [39], hub_position: [7.0, 4.0] }
+    
+    # Row 5
+    40: { attached_nodes: [40], hub_position: [0.0, 5.0] }
+    41: { attached_nodes: [41], hub_position: [1.0, 5.0] }
+    42: { attached_nodes: [42], hub_position: [2.0, 5.0] }
+    43: { attached_nodes: [43], hub_position: [3.0, 5.0] }
+    44: { attached_nodes: [44], hub_position: [4.0, 5.0] }
+    45: { attached_nodes: [45], hub_position: [5.0, 5.0] }
+    46: { attached_nodes: [46], hub_position: [6.0, 5.0] }
+    47: { attached_nodes: [47], hub_position: [7.0, 5.0] }
+    
+    # Row 6
+    48: { attached_nodes: [48], hub_position: [0.0, 6.0] }
+    49: { attached_nodes: [49], hub_position: [1.0, 6.0] }
+    50: { attached_nodes: [50], hub_position: [2.0, 6.0] }
+    51: { attached_nodes: [51], hub_position: [3.0, 6.0] }
+    52: { attached_nodes: [52], hub_position: [4.0, 6.0] }
+    53: { attached_nodes: [53], hub_position: [5.0, 6.0] }
+    54: { attached_nodes: [54], hub_position: [6.0, 6.0] }
+    55: { attached_nodes: [55], hub_position: [7.0, 6.0] }
+    
+    # Row 7
+    56: { attached_nodes: [56], hub_position: [0.0, 7.0] }
+    57: { attached_nodes: [57], hub_position: [1.0, 7.0] }
+    58: { attached_nodes: [58], hub_position: [2.0, 7.0] }
+    59: { attached_nodes: [59], hub_position: [3.0, 7.0] }
+    60: { attached_nodes: [60], hub_position: [4.0, 7.0] }
+    61: { attached_nodes: [61], hub_position: [5.0, 7.0] }
+    62: { attached_nodes: [62], hub_position: [6.0, 7.0] }
+    63: { attached_nodes: [63], hub_position: [7.0, 7.0] }
+
+RadioChannels:
+    defaults:
+        data_rate: 16
+        ber: [0, 0]
+        mac_policy: [FUZZY_TOKEN]
+        
+        fuzzy_token:
+            initial_FA: 64       # Test 1: Start with all hubs
+            FA_increment: 1
+            FA_decrement_factor: 0.5
+            min_transmission_prob: 0.0
+            silence_cycles: 50
+            thr1: 0.10
+            thr2: 0.90
+            thr_is_percentage: true
+            pi_type: "equal"
+            token_order: "static"
+            initial_token_holder: 0
+            collision_detect_cycles: 2
+            preamble_cycles: 1
+
+clock_period_ps: 1000
+reset_time: 100
+simulation_time: 5000      # SHORT: Only 5000 cycles for quick test
+stats_warm_up_time: 1000   # SHORT: Only 1000 warmup
+
+min_packet_size: 2
+max_packet_size: 4
+packet_injection_rate: 0.015  # Same as 16-hub test
+probability_of_retransmission: 0.01
+traffic_distribution: TRAFFIC_RANDOM
+traffic_table_filename: ""
+
+use_winoc: true
+use_wirxsleep: false
+detailed: false
+verbose_mode: VERBOSE_OFF
+trace_mode: false
+trace_filename: ""
+max_volume_to_be_drained: 0
+show_buffer_stats: false

@@ -125,7 +125,13 @@ void TokenRing::attachHub(int channel, int hub, sc_in<int>* hub_token_holder_por
         // initial value that will be overwritten if mac policy != TOKEN_PACKET
         token_hold_count[channel] = 0;
 
-        string macPolicy = GlobalParams::channel_configuration[channel].macPolicy[0];
+        // Store the MAC policy for this channel
+        token_policy[channel] = make_pair(
+            GlobalParams::channel_configuration[channel].macPolicy[0],
+            GlobalParams::channel_configuration[channel].macPolicy
+        );
+
+        string macPolicy = token_policy[channel].first;
 
         if (macPolicy != TOKEN_PACKET && macPolicy != FUZZY_TOKEN) {
             // checking max hold cycles vs wireless transmission latency

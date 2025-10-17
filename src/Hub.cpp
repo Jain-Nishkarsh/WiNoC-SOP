@@ -163,6 +163,7 @@ void Hub::updateTxPower()
 
 void Hub::txRadioProcessTokenPacket(int channel)
 {
+	static int token_packet_tx_count = 0;
     int current_holder = current_token_holder[channel]->read();
     int current_channel_flag =flag[channel]->read();
 
@@ -171,6 +172,12 @@ void Hub::txRadioProcessTokenPacket(int channel)
 		if (!init[channel]->buffer_tx.IsEmpty())
 		{
 			Flit flit = init[channel]->buffer_tx.Front();
+			
+			token_packet_tx_count++;
+			if (token_packet_tx_count % 10 == 0) {
+				cerr << "[TOKEN-PACKET-TX #" << token_packet_tx_count << "] Hub " << local_id 
+				     << " transmitting (src=" << flit.src_id << ", dst=" << flit.dst_id << ")" << endl;
+			}
 
 			// TODO: check whether it would make sense to use transmission_in_progress to
 			// avoid multiple notify()
@@ -296,6 +303,11 @@ void Hub::antennaToTileProcess()
 					buffer_full_status_tx[i].read().mask[vc] == false)
 				{
 					LOG << "Flit " << flit << " moved from buffer_to_tile[" << i <<"][" << vc << "] to signal flit_tx["<<i<<"] " << endl;
+					if (flit.flit_type == FLIT_TYPE_HEAD) {
+						cerr << "[B2T->ROUTER] Hub " << local_id << " sending HEAD flit (src=" << flit.src_id 
+						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
+						     << ") from buffer_to_tile[" << i << "][" << vc << "] to Router" << endl;
+					}
 
 					flit_tx[i].write(flit);
 					current_level_tx[i] = 1 - current_level_tx[i];
@@ -309,6 +321,11 @@ void Hub::antennaToTileProcess()
 				else
 				{
 					LOG << "Flit " << flit << " cannot move from buffer_to_tile[" << i <<"] [" << vc << "] to signal flit_tx["<<i<<"] " << endl;
+					if (flit.flit_type == FLIT_TYPE_HEAD) {
+						cerr << "[B2T-STALL] Hub " << local_id << " cannot send HEAD flit (src=" << flit.src_id 
+						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
+						     << ") to Router - backpressure from buffer_to_tile[" << i << "][" << vc << "]" << endl;
+					}
 				}
 			}//if buffer not empty
 		}
@@ -399,6 +416,11 @@ void Hub::antennaToTileProcess()
 					target[channel]->buffer_rx.Pop();
 					power.antennaBufferPop();
 					LOG << "*** [Ch" << channel << "] Moving flit  " << received_flit << " from buffer_rx to buffer_to_tile[" << port <<"][" << vc << "]" << endl;
+					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+						cerr << "[RX->B2T] Hub " << local_id << " moving HEAD flit (src=" << received_flit.src_id 
+						     << ", dst=" << received_flit.dst_id << ", seq=" << received_flit.sequence_no 
+						     << ") from buffer_rx[" << channel << "] to buffer_to_tile[" << port << "][" << vc << "]" << endl;
+					}
 
 					buffer_to_tile[port][vc].Push(received_flit);
 					power.bufferToTilePush();
@@ -413,7 +435,14 @@ void Hub::antennaToTileProcess()
 					}
 				}
 				else
+				{
 					LOG << "Full buffer_to_tile[" << port <<"][" << vc << "]" << ", cannot store " << received_flit << endl;
+					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+						cerr << "[B2T-FULL] Hub " << local_id << " STALLED - buffer_to_tile[" << port << "][" << vc << "] FULL, "
+						     << "cannot move HEAD flit (src=" << received_flit.src_id << ", dst=" << received_flit.dst_id 
+						     << ", seq=" << received_flit.sequence_no << ")" << endl;
+					}
+				}
 			}
 			else
 			{
@@ -475,7 +504,10 @@ void Hub::tileToAntennaProcess()
 		else if (macPolicy == FUZZY_TOKEN)
 			txRadioProcessFuzzyToken(channel);
 		else
+		{
+			cerr << "ERROR: Unknown MAC policy '" << macPolicy << "' for channel " << channel << endl;
 			assert(false);
+		}
 	}
 
 	int last_reserved = NOT_VALID;
@@ -707,6 +739,8 @@ void Hub::initializeFuzzyToken(int channel)
 	fuzzyTokenStepCycles[channel] = 0;
 	fuzzyTokenPreambleDetected[channel] = false;
 	fuzzyTokenActiveTransmitters[channel] = 0;
+	fuzzyTokenStepStartCycle[channel] = 0;  // Option 2
+	fuzzyTokenTransmissionThisStep[channel] = false;  // Option 2
 	
 	// Register this channel with the global controller if not already done
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
@@ -715,8 +749,9 @@ void Hub::initializeFuzzyToken(int channel)
 		// This is the first hub to use this channel, register it
 		FuzzyTokenConfig config = GlobalParams::channel_configuration[channel].fuzzyTokenConfig;
 		
-		// Collect all node IDs attached to hubs using this channel
-		vector<int> allNodes;
+		// Collect all HUB IDs using this channel
+		// NOTE: FuzzyTokenNode uses hub IDs, not tile/node IDs
+		vector<int> allHubs;
 		for (auto& hubConfig : GlobalParams::hub_configuration)
 		{
 			int hubId = hubConfig.first;
@@ -725,22 +760,22 @@ void Hub::initializeFuzzyToken(int channel)
 			// Check if this hub transmits on this channel
 			if (find(txCh.begin(), txCh.end(), channel) != txCh.end())
 			{
-				// Add all nodes attached to this hub
-				vector<int> nodes = hubConfig.second.attachedNodes;
-				allNodes.insert(allNodes.end(), nodes.begin(), nodes.end());
+				allHubs.push_back(hubId);
 			}
 		}
 		
 		// Remove duplicates and sort
-		sort(allNodes.begin(), allNodes.end());
-		allNodes.erase(unique(allNodes.begin(), allNodes.end()), allNodes.end());
+		sort(allHubs.begin(), allHubs.end());
+		allHubs.erase(unique(allHubs.begin(), allHubs.end()), allHubs.end());
 		
-		controller.registerChannel(channel, config, allNodes.size(), allNodes);
+		controller.registerChannel(channel, config, allHubs.size(), allHubs);
 		
 		if (GlobalParams::verbose_mode >= VERBOSE_LOW)
 		{
 			cout << "Hub " << local_id << " initialized Fuzzy Token for channel " << channel
-			     << " with " << allNodes.size() << " nodes" << endl;
+			     << " with " << allHubs.size() << " hubs: ";
+			for (int h : allHubs) cout << h << " ";
+			cout << endl;
 		}
 	}
 }
@@ -775,9 +810,18 @@ void Hub::sendNack(int channel)
 
 void Hub::txRadioProcessFuzzyToken(int channel)
 {
+	static int fuzzy_call_count = 0;
+	fuzzy_call_count++;
+	
+	if (fuzzy_call_count % 1000 == 0) {
+		cerr << "[FUZZY-PROCESS #" << fuzzy_call_count << "] Hub " << local_id 
+		     << " processing channel " << channel << endl;
+	}
+	
 	// Initialize Fuzzy Token for this channel if needed
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end())
 	{
+		cerr << "[FUZZY-INIT] Hub " << local_id << " initializing Fuzzy Token for channel " << channel << endl;
 		initializeFuzzyToken(channel);
 	}
 	
@@ -785,6 +829,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
 	FuzzyTokenChannelState* state = controller.getChannelState(channel);
 	
+	// NULL CHECK FIRST - return early if state not initialized yet
 	if (!state)
 	{
 		if (GlobalParams::verbose_mode == VERBOSE_HIGH)
@@ -792,11 +837,87 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		return;
 	}
 	
-	// Check if we have data to send
+	// PAPER-CORRECT: Synchronous step coordination
+	// Steps end after: 1 cycle (silence), 2 cycles (collision), C cycles (success)
+	// Only token holder coordinates step end to ensure ALL nodes register preambles first
+	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	
+	// Track step phases
+	if (fuzzyTokenTransmissionThisStep[channel]) {
+		fuzzyTokenStepStartCycle[channel] = current_cycle;
+		fuzzyTokenTransmissionThisStep[channel] = false;
+	}
+	
+	int step_duration = current_cycle - fuzzyTokenStepStartCycle[channel];
+	
+	// CRITICAL FIX: Only token holder ends step after preamble collection phase
+	// This prevents premature resetStepState() that was clearing collision counts
+	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
+	if (node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
+		// Token holder checks for activity after preamble phase
+		int active_count = state->getActiveTransmitters();
+		
+		if (active_count == 0) {
+			// SILENCE: No preambles sent, end step after 1 cycle
+			static int silence_count = 0;
+			silence_count++;
+			if (silence_count <= 10 || silence_count % 1000 == 0) {
+				cerr << "[FUZZY-SILENCE #" << silence_count << "] Token holder (Hub " << local_id
+				     << ") detected silence after " << step_duration << " cycles, ending step" << endl;
+			}
+			controller.endStep(channel, OUTCOME_SILENCE, step_duration);
+			
+			// Start new step
+			fuzzyTokenStepStartCycle[channel] = current_cycle;
+			fuzzyTokenActiveTransmitters[channel] = 0;
+			// Reset all nodes
+			for (auto& pair : fuzzyTokenNodes) {
+				if (pair.first == channel) {
+					pair.second->resetStepState();
+				}
+			}
+		}
+		// Note: Collision and Success outcomes are handled when NACK is sent or TAIL completes
+	}
+	
 	bool hasData = !init[channel]->buffer_tx.IsEmpty();
+	
+	static int has_data_count = 0;
+	if (hasData) {
+		has_data_count++;
+		if (has_data_count % 100 == 0) {
+			Flit flit = init[channel]->buffer_tx.Front();
+			cerr << "[FUZZY-HAS-DATA #" << has_data_count << "] Hub " << local_id 
+			     << " has data: src=" << flit.src_id << ", dst=" << flit.dst_id 
+			     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no 
+			     << ", tx_in_progress=" << transmission_in_progress.at(channel) << endl;
+		}
+	}
 	
 	// Determine if this node should attempt transmission
 	bool shouldTransmit = node->shouldAttemptTransmission(hasData);
+	
+	static int no_transmit_count = 0;
+	static int yes_transmit_count = 0;
+	
+	if (hasData && !shouldTransmit) {
+		no_transmit_count++;
+		if (no_transmit_count % 50 == 0) {
+			cerr << "[FUZZY-SKIP #" << no_transmit_count << "] Hub " << local_id 
+			     << " has data but shouldTransmit=false (token holder=" << node->isTokenHolder() 
+			     << ", in FA=" << node->isInFuzzyArea()
+			     << ", mode=" << (state->getMode() == FUZZY_MODE ? "FUZZY" : "FOCUSED") 
+			     << ", tx_in_progress=" << transmission_in_progress.at(channel) << ")" << endl;
+		}
+	}
+	
+	if (hasData && shouldTransmit) {
+		yes_transmit_count++;
+		cerr << "[FUZZY-SHOULD-TX #" << yes_transmit_count << "] Hub " << local_id 
+		     << " should transmit (mode=" << (state->getMode() == FUZZY_MODE ? "FUZZY" : "FOCUSED")
+		     << ", token holder=" << node->isTokenHolder()
+		     << ", tx_in_progress=" << transmission_in_progress.at(channel) << ")" << endl;
+	}
 	
 	if (shouldTransmit)
 	{
@@ -804,11 +925,21 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		
 		if (mode == FUZZY_MODE)
 		{
-			// In fuzzy mode, send preamble first
+			// PAPER-CORRECT: Fuzzy Token Protocol Phases
+			// Phase 1 (Preamble): All nodes in FA send preambles
+			// Phase 2 (Collision Detection): Token holder detects collision after preamble_cycles
+			// Phase 3 (Transmission): Only if no collision, winner transmits
+			
+			// Phase 1: Send preamble (happens once per step)
 			if (!node->hasSentPreamble())
 			{
 				node->startPreamble();
-				fuzzyTokenActiveTransmitters[channel]++;
+				
+				// Register transmission with global controller (broadcast model)
+				state->registerTransmission(local_id);
+				
+				cerr << "[PREAMBLE-SENT] Hub " << local_id << " sent preamble on channel " << channel 
+				     << " (step start: " << fuzzyTokenStepStartCycle[channel] << ", current: " << current_cycle << ")" << endl;
 				
 				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
 				{
@@ -816,97 +947,231 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					     << " (FA mode)" << endl;
 				}
 				
-				// Check for collision after preamble phase
-				// In real implementation, this would happen after preamble_cycles
-				// For simulation, we do it immediately
-				
-				// If this node is the token holder, it can detect collisions
-				if (node->isTokenHolder())
+				// DON'T start transmission yet - wait for collision detection phase!
+				return;
+			}
+			
+			// Phase 2: Collision Detection (only token holder, after preamble phase completes)
+			if (node->isTokenHolder())
+			{
+				// Wait for preamble_cycles to ensure all preambles are registered
+				if (step_duration >= state->config.preamble_cycles)
 				{
-					if (detectMultiplePreambles(channel))
+					// In broadcast model, token holder can see all preambles
+					if (state->hasCollision())
 					{
-						// Collision detected, send NACK
+						int collision_count = state->getActiveTransmitters();
+						cerr << "[COLLISION-DETECTED] Hub " << local_id << " (token holder) detected "
+						     << collision_count << " simultaneous transmitters at cycle " << current_cycle 
+						     << " (step started at " << fuzzyTokenStepStartCycle[channel] << ")" << endl;
+						
+						// Collision detected, send NACK to abort all transmissions
 						sendNack(channel);
 						node->receiveNack();
 						
-						// Update controller: collision outcome
+						// Broadcast NACK to all nodes that sent preambles
+						for (auto& pair : fuzzyTokenNodes) {
+							if (pair.first == channel && pair.second->hasSentPreamble()) {
+								pair.second->receiveNack();
+							}
+						}
+						
+						// PAPER-CORRECT: End step after collision_detect_cycles (2 cycles: preamble + NACK)
+						cerr << "[AIMD-COLLISION] Token holder ending step with COLLISION outcome (detected " 
+						     << collision_count << " transmitters)" << endl;
 						int collisionCycles = state->config.collision_detect_cycles;
 						controller.endStep(channel, OUTCOME_COLLISION, collisionCycles);
 						
-						// Reset for next step
+						// Start new step immediately
+						fuzzyTokenStepStartCycle[channel] = current_cycle + collisionCycles;
 						fuzzyTokenActiveTransmitters[channel] = 0;
-						node->resetStepState();
+						
+						// Reset all nodes for new step
+						for (auto& pair : fuzzyTokenNodes) {
+							if (pair.first == channel) {
+								pair.second->resetStepState();
+							}
+						}
 						return;
 					}
+					
+					// No collision - exactly 1 transmitter (or 0 due to timing)
+					// Single transmitter gets green light - this check is implicit below
+					cerr << "[NO-COLLISION] Hub " << local_id << " (token holder) detected NO collision at cycle " 
+					     << current_cycle << ", active=" << state->getActiveTransmitters() << endl;
 				}
 			}
 			
-			// No collision, proceed with transmission
-			if (!node->hasReceivedNack() && !transmission_in_progress.at(channel))
+			// Phase 3: Transmission (only if preamble sent, no NACK received, and after collision check)
+			// Wait for collision detection phase to complete before starting transmission
+			if (step_duration < state->config.preamble_cycles + 1)
+			{
+				// Still in preamble/collision detection phase - don't transmit yet
+				return;
+			}
+			
+			// Check if NACK was received (collision abort)
+			if (node->hasReceivedNack())
+			{
+				cerr << "[TX-ABORTED] Hub " << local_id << " received NACK, aborting transmission" << endl;
+				return;
+			}
+			
+			// Proceed with transmission - no collision detected
+			if (!init[channel]->buffer_tx.IsEmpty())
 			{
 				Flit flit = init[channel]->buffer_tx.Front();
 				
-				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
-				{
-					cout << "Hub " << local_id << " starting payload transmission on channel "
-					     << channel << " (FA mode)" << endl;
+				static int fuzzy_tx_count = 0;
+				if (!transmission_in_progress.at(channel)) {
+					// First flit of packet
+					fuzzy_tx_count++;
+					cerr << "[FUZZY-TX-START #" << fuzzy_tx_count << "] Hub " << local_id 
+					     << " starting packet transmission in FUZZY mode (after collision check):" << endl
+					     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
+					     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no 
+					     << ", active_transmitters=" << state->getActiveTransmitters() << endl;
+					
+					// Mark that transmission started in this step
+					fuzzyTokenTransmissionThisStep[channel] = true;
 				}
 				
+				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
+				{
+					cout << "Hub " << local_id << " requesting transmission of flit " << flit 
+					     << " on channel " << channel << " (FA mode)" << endl;
+				}
+				
+				// Notify Initiator to send next flit (HEAD, BODY, or TAIL)
 				init[channel]->start_request_event.notify();
 				
-				// Calculate payload transmission cycles
-				int payloadCycles = flit_transmission_cycles[channel];
-				
-				// Update controller: success outcome
-				controller.endStep(channel, OUTCOME_SUCCESS, payloadCycles);
-				
-				// Reset for next step
-				fuzzyTokenActiveTransmitters[channel] = 0;
-				node->resetStepState();
+				// NOTE: endStep() is called in Initiator when transmission completes (TAIL sent)
 			}
 		}
 		else // FOCUSED_MODE
 		{
-			// In focused mode, only token holder transmits (no preamble needed)
-			if (node->isTokenHolder() && hasData && !transmission_in_progress.at(channel))
+		// In focused mode, only token holder transmits (no preamble needed)
+		// Note: Similar to TOKEN_PACKET, keep calling notify() for each flit until packet completes
+		if (node->isTokenHolder() && hasData)
+		{
+			if (!init[channel]->buffer_tx.IsEmpty())
 			{
-				Flit flit = init[channel]->buffer_tx.Front();
-				
-				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
+				Flit flit = init[channel]->buffer_tx.Front();			static int focused_tx_count = 0;
+			focused_tx_count++;
+			cerr << "[FOCUSED-TX-START #" << focused_tx_count << "] Hub " << local_id 
+			     << " starting transmission in FOCUSED mode:" << endl
+			     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
+			     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no << endl;				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
 				{
 					cout << "Hub " << local_id << " (token holder) transmitting on channel "
 					     << channel << " (focused mode)" << endl;
 				}
 				
+				// OPTION 2: Mark that transmission started in this step
+				// The step will end when TAIL flit is sent (in Initiator)
+				fuzzyTokenTransmissionThisStep[channel] = true;
+				
 				init[channel]->start_request_event.notify();
 				
-				// Calculate payload transmission cycles
-				int payloadCycles = flit_transmission_cycles[channel];
-				
-				// Update controller: success outcome
-				controller.endStep(channel, OUTCOME_SUCCESS, payloadCycles);
-				
-				node->resetStepState();
+				// NOTE: endStep() is called in Initiator when transmission completes (TAIL sent)
+				// NOT here, because transmission is asynchronous
 			}
+		}
 		}
 	}
 	else
 	{
-		// No transmission attempt
-		// Check if step should end with silence outcome
-		if (fuzzyTokenActiveTransmitters[channel] == 0 && !transmission_in_progress.at(channel))
-		{
-			// Silence: no one transmitted
-			int silenceCycles = state->config.silence_cycles;
-			controller.endStep(channel, OUTCOME_SILENCE, silenceCycles);
-			
-			if (GlobalParams::verbose_mode == VERBOSE_HIGH)
-			{
-				cout << "Channel " << channel << " silence at cycle "
-				     << sc_time_stamp().to_double() / GlobalParams::clock_period_ps << endl;
-			}
-			
-			node->resetStepState();
-		}
+		// No transmission attempt from this hub
+		// NOTE: Do NOT end step here! The synchronous step coordination at the top
+		// of this function (lines 825-870) handles step end based on preamble collection.
+		// Ending step here would cause premature resetStepState() before all preambles registered.
+		
+		// PAPER-CORRECT: Only the token holder's synchronous check should end steps,
+		// after waiting for preamble_cycles to allow ALL nodes to register transmissions.
 	}
 }
+
+void Hub::completeFuzzyTokenTransmission(int channel)
+{
+	cerr << "[DEBUG] completeFuzzyTokenTransmission called for channel " << channel << endl;
+	
+	// Check if this hub uses FUZZY_TOKEN MAC
+	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
+		cerr << "[DEBUG] No fuzzyTokenNode for channel " << channel << ", returning" << endl;
+		return; // Not using Fuzzy Token on this channel
+	}
+	
+	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
+	FuzzyTokenChannelState* state = controller.getChannelState(channel);
+	if (!state) {
+		cerr << "[DEBUG] No channel state for channel " << channel << endl;
+		return;
+	}
+	
+	// Calculate transmission duration
+	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	int step_start = fuzzyTokenStepStartCycle[channel];
+	int transmission_cycles = current_cycle - step_start;
+	
+	// End the step with SUCCESS outcome
+	controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
+	
+	// Reset step state for next transmission
+	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
+		fuzzyTokenNodes[channel]->resetStepState();
+	}
+	fuzzyTokenActiveTransmitters[channel] = 0;
+	fuzzyTokenStepStartCycle[channel] = current_cycle; // Start new step
+	fuzzyTokenTransmissionThisStep[channel] = false;
+	
+	cerr << "[FUZZY-STEP-END] Channel " << channel 
+	     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
+}
+
+bool Hub::isFuzzyTokenChannel(int channel)
+{
+	return fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end();
+}
+
+bool Hub::isTokenHolderForChannel(int channel)
+{
+	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
+		return false;
+	}
+	return fuzzyTokenNodes[channel]->isTokenHolder();
+}
+
+void Hub::handleFuzzyTokenCollision(int channel)
+{
+	// Check if this hub uses FUZZY_TOKEN MAC
+	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
+		return; // Not using Fuzzy Token on this channel
+	}
+	
+	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
+	FuzzyTokenChannelState* state = controller.getChannelState(channel);
+	if (!state) {
+		return;
+	}
+	
+	// Calculate collision duration (time since step start)
+	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	int step_start = fuzzyTokenStepStartCycle[channel];
+	int collision_cycles = current_cycle - step_start;
+	
+	// End the step with COLLISION outcome
+	// This will trigger MULTIPLICATIVE DECREASE of FA_size (FA × 0.5)
+	controller.endStep(channel, OUTCOME_COLLISION, collision_cycles);
+	
+	// Reset step state for next transmission
+	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
+		fuzzyTokenNodes[channel]->resetStepState();
+	}
+	fuzzyTokenActiveTransmitters[channel] = 0;
+	fuzzyTokenStepStartCycle[channel] = current_cycle; // Start new step
+	fuzzyTokenTransmissionThisStep[channel] = false;
+	
+	cerr << "[FUZZY-COLLISION-END] Channel " << channel 
+	     << " TX-ERROR detected (COLLISION), FA_size will decrease multiplicatively" << endl;
+}
+
