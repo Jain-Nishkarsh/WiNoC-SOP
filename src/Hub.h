@@ -203,6 +203,9 @@ SC_MODULE(Hub)
     
     // Handle collision detection for AIMD
     void handleFuzzyTokenCollision(int channel);
+    
+    // Handle buffer overflow (treat as SILENCE, not COLLISION)
+    void handleBufferOverflow(int channel);
 
     private:
     map<int,int> flit_transmission_cycles;

@@ -9,6 +9,8 @@
  */
 
 #include "GlobalStats.h"
+#include "FuzzyTokenController.h"
+#include "Target.h"
 using namespace std;
 
 GlobalStats::GlobalStats(const NoC * _noc)
@@ -520,6 +522,12 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
 
     if (GlobalParams::show_buffer_stats)
       showBufferStats(out);
+
+    // Print Fuzzy Token Protocol statistics if any channels are configured
+    FuzzyTokenController& fuzzyController = FuzzyTokenController::getInstance();
+    if (fuzzyController.hasFuzzyTokenChannels()) {
+        fuzzyController.printAllStats();
+    }
 
 }
 

@@ -9,10 +9,12 @@
  */
 
 #include "FuzzyTokenController.h"
+#include "Target.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 
 using namespace std;
 
@@ -42,22 +44,18 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         }
     }
     
-    // Initialize fuzzy area
+    // Initialize fuzzy area (centered later around current token holder)
     FA_size = config.initial_FA;
     if (FA_size > numNodes) FA_size = numNodes;
     if (FA_size < 1) FA_size = 1;
-    
-    fuzzyArea.reset();
-    for (int i = 0; i < FA_size && i < numNodes; i++) {
-        fuzzyArea.set(tokenRingOrder[i]);
-    }
+    rebuildFuzzyArea();
     
     // Initialize transmission probabilities
     updateTransmissionProbabilities();
     
     // Start in fuzzy mode
     periodMode = FUZZY_MODE;
-    currentStepCycles = config.silence_cycles; // Initial assumption
+    currentStepCycles = 0; // Will be set based on actual step outcomes
     
     if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
         cout << "FuzzyTokenChannelState initialized: numNodes=" << numNodes 
@@ -91,11 +89,8 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             break;
     }
     
-    // Rebuild fuzzy area bitset based on new FA_size
-    fuzzyArea.reset();
-    for (int i = 0; i < FA_size && i < numNodes; i++) {
-        fuzzyArea.set(tokenRingOrder[i]);
-    }
+    // Rebuild fuzzy area centered around token holder
+    rebuildFuzzyArea();
     
     // Update transmission probabilities
     updateTransmissionProbabilities();
@@ -121,19 +116,52 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
     
     if (config.pi_type == "equal") {
         // Equal probability for all nodes in fuzzy area
-        double p = 1.0 / FA_size;
+        double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
-            if (fuzzyArea.test(i)) {
-                transmissionProb[i] = p;
-            }
+            if (fuzzyArea.test(i)) transmissionProb[i] = p_uniform;
         }
     } else if (config.pi_type == "gaussian") {
-        // Gaussian distribution centered around token holder
-        // For simplicity, use equal for now (can be extended)
-        double p = 1.0 / FA_size;
+        // Gaussian distribution centered around token holder position on the ring
+        // sigma heuristic: FA_size/2
+        const double sigma = std::max(1.0, FA_size / 2.0);
+        int centerIdx = tokenRingPosition;
+        // Assign weights based on circular distance on ring order
+        double sumw = 0.0;
+        const int n = (int)tokenRingOrder.size();
+        for (int k = 0; k < FA_size && k < n; ++k) {
+            int idx = (centerIdx + k - FA_size/2 + n) % n;
+            int nodeId = tokenRingOrder[idx];
+            const int dist = std::abs(k - FA_size/2);
+            const double w = std::exp(-(dist*dist) / (2.0 * sigma * sigma));
+            transmissionProb[nodeId] = w;
+            sumw += w;
+        }
+        // Normalize and apply min_transmission_prob if configured
+        const double minp = std::max(0.0, config.min_transmission_prob);
+        double sumAfter = 0.0;
+        if (sumw > 0.0) {
+            const double invSum = 1.0 / sumw;
+            for (int i = 0; i < numNodes; i++) {
+                if (transmissionProb[i] > 0) {
+                    transmissionProb[i] *= invSum;
+                    if (transmissionProb[i] < minp) transmissionProb[i] = minp;
+                    sumAfter += transmissionProb[i];
+                }
+            }
+        }
+        // Renormalize to 1 over FA
+        if (sumAfter > 0.0) {
+            const double invSumAfter = 1.0 / sumAfter;
+            for (int i = 0; i < numNodes; i++) {
+                if (transmissionProb[i] > 0) transmissionProb[i] *= invSumAfter;
+            }
+        }
+    } else {
+        // Fallback to equal if unknown setting
+        double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
-            if (fuzzyArea.test(i)) {
-                transmissionProb[i] = p;
+            if (transmissionProb[i] > 0) {
+                transmissionProb[i] = p_uniform;
             }
         }
     }
@@ -143,7 +171,11 @@ void FuzzyTokenChannelState::advanceToken() {
     // Move to next node in ring order
     tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
     tokenID = tokenRingOrder[tokenRingPosition];
-    
+    // Recenter FA around new token holder
+    rebuildFuzzyArea();
+    // Update probabilities with new center
+    updateTransmissionProbabilities();
+
     if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
         cout << "Token advanced to node " << tokenID << endl;
     }
@@ -162,7 +194,7 @@ void FuzzyTokenChannelState::switchMode() {
     FuzzyTokenMode oldMode = periodMode;
     
     if (periodMode == FUZZY_MODE) {
-        // Switch to focused if FA_size < thr1
+        // Switch to FOCUSED when FA_size DROPS BELOW thr1 (low contention narrowed FA)
         if (FA_size < thr1_value) {
             periodMode = FOCUSED_MODE;
             totalFocusedSteps++;
@@ -170,7 +202,7 @@ void FuzzyTokenChannelState::switchMode() {
             totalFuzzySteps++;
         }
     } else { // FOCUSED_MODE
-        // Switch to fuzzy if FA_size > thr2
+        // Switch back to FUZZY when FA_size EXCEEDS thr2 (contention reduced, can expand FA)
         if (FA_size > thr2_value) {
             periodMode = FUZZY_MODE;
             totalFuzzySteps++;
@@ -178,6 +210,9 @@ void FuzzyTokenChannelState::switchMode() {
             totalFocusedSteps++;
         }
     }
+    
+    // Update FA_size histogram
+    FA_size_histogram[FA_size]++;
     
     if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldMode != periodMode) {
         cout << "Mode switched: " << (oldMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
@@ -259,6 +294,19 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     state->currentStepCycles = stepCycles;
 }
 
+void FuzzyTokenChannelState::rebuildFuzzyArea() {
+    fuzzyArea.reset();
+    if (numNodes <= 0 || tokenRingOrder.empty()) return;
+    int n = (int)tokenRingOrder.size();
+    int center = tokenRingPosition;
+    int half = FA_size / 2;
+    for (int k = -half; k < -half + FA_size; ++k) {
+        int idx = (center + k + n) % n;
+        int nodeId = tokenRingOrder[idx];
+        fuzzyArea.set(nodeId);
+    }
+}
+
 void FuzzyTokenController::reset() {
     for (auto& pair : channelStates) {
         delete pair.second;
@@ -271,13 +319,39 @@ void FuzzyTokenController::printStats(int channelId) {
     if (!state) return;
     
     cout << "\n=== Fuzzy Token Statistics for Channel " << channelId << " ===" << endl;
-    cout << "Total Collisions: " << state->totalCollisions << endl;
-    cout << "Total Successes: " << state->totalSuccesses << endl;
-    cout << "Total Silences: " << state->totalSilences << endl;
-    cout << "Total Fuzzy Steps: " << state->totalFuzzySteps << endl;
-    cout << "Total Focused Steps: " << state->totalFocusedSteps << endl;
-    cout << "Final FA Size: " << state->FA_size << endl;
-    cout << "Final Mode: " << (state->periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << endl;
+    cout << "1. Number of collisions detected: " << state->totalCollisions << endl;
+    cout << "2. Number of steps for which focused mode is used: " << state->totalFocusedSteps << endl;
+    cout << "3. Number of steps for which fuzzy mode is used: " << state->totalFuzzySteps << endl;
+    
+    // Print FA_size histogram
+    cout << "4. Histogram of FA_size:" << endl;
+    if (state->FA_size_histogram.empty()) {
+        cout << "   (No FA_size data recorded)" << endl;
+    } else {
+        // Find the max FA_size and max count for formatting
+        int maxFA = 0;
+        int maxCount = 0;
+        for (const auto& entry : state->FA_size_histogram) {
+            if (entry.first > maxFA) maxFA = entry.first;
+            if (entry.second > maxCount) maxCount = entry.second;
+        }
+        
+        // Print histogram
+        cout << "   FA_size | Count" << endl;
+        cout << "   --------+------" << endl;
+        for (int fa = 1; fa <= maxFA; fa++) {
+            if (state->FA_size_histogram.find(fa) != state->FA_size_histogram.end()) {
+                int count = state->FA_size_histogram.at(fa);
+                cout << "   " << setw(7) << fa << " | " << setw(6) << count << endl;
+            }
+        }
+    }
+    
+    cout << "\nAdditional Information:" << endl;
+    cout << "  Total Successes: " << state->totalSuccesses << endl;
+    cout << "  Total Silences: " << state->totalSilences << endl;
+    cout << "  Final FA Size: " << state->FA_size << endl;
+    cout << "  Final Mode: " << (state->periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << endl;
     cout << "=================================================\n" << endl;
 }
 
@@ -295,4 +369,38 @@ void FuzzyTokenChannelState::registerTransmission(int hubId) {
 void FuzzyTokenChannelState::resetStepState() {
     transmittingHubsThisStep.clear();
     activeTransmittersThisStep = 0;
+}
+
+void FuzzyTokenController::printAllStats() {
+    if (channelStates.empty()) {
+        return; // No fuzzy token channels configured
+    }
+    
+    cout << "\n" << endl;
+    cout << "========================================================" << endl;
+    cout << "         FUZZY TOKEN PROTOCOL STATISTICS" << endl;
+    cout << "========================================================" << endl;
+    
+    for (const auto& entry : channelStates) {
+        int channelId = entry.first;
+        printStats(channelId);
+    }
+    
+    // Add wireless buffer statistics
+    cout << "\n=== Wireless Buffer Statistics ===" << endl;
+    int total_attempts = Target::getTotalWirelessRxAttempts();
+    int total_success = Target::getTotalWirelessRxSuccess();
+    int total_dropped = Target::getTotalWirelessRxDropped();
+    
+    cout << "Total wireless RX attempts: " << total_attempts << endl;
+    cout << "Total wireless RX success: " << total_success << endl;
+    cout << "Total wireless RX dropped (buffer overflow): " << total_dropped << endl;
+    
+    if (total_attempts > 0) {
+        double drop_rate = (100.0 * total_dropped) / total_attempts;
+        double success_rate = (100.0 * total_success) / total_attempts;
+        cout << "Drop rate: " << drop_rate << "%" << endl;
+        cout << "Success rate: " << success_rate << "%" << endl;
+    }
+    cout << "========================================" << endl;
 }

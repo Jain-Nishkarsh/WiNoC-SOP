@@ -28,6 +28,8 @@ private:
     bool nackReceived;
     bool preambleSent;
     int transmissionStartCycle;
+    bool transmissionDecisionMade; // Decision made for this step
+    bool shouldTransmitThisStep;   // Cached decision for this step
     
 public:
     FuzzyTokenNode(int nId, int chId) : 
@@ -37,7 +39,9 @@ public:
         transmissionPending(false),
         nackReceived(false),
         preambleSent(false),
-        transmissionStartCycle(-1)
+        transmissionStartCycle(-1),
+        transmissionDecisionMade(false),
+        shouldTransmitThisStep(false)
     {}
     
     // Check if this node should attempt transmission in current step

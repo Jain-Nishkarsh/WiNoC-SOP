@@ -56,3 +56,16 @@ void Target::b_transport( tlm::tlm_generic_payload& trans, sc_time& delay )
     }
 }
 
+// Static accessor functions for wireless statistics
+int Target::getTotalWirelessRxAttempts() {
+    return total_wireless_rx_attempts;
+}
+
+int Target::getTotalWirelessRxSuccess() {
+    return total_wireless_rx_success;
+}
+
+int Target::getTotalWirelessRxDropped() {
+    return total_wireless_rx_dropped;
+}
+

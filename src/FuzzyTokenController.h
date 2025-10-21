@@ -59,6 +59,9 @@ public:
     int totalFuzzySteps;
     int totalFocusedSteps;
     
+    // Histogram of FA_size (key: FA_size, value: count of steps)
+    map<int, int> FA_size_histogram;
+    
     // Global transmission tracking (for broadcast collision detection)
     int activeTransmittersThisStep;
     set<int> transmittingHubsThisStep;
@@ -85,6 +88,7 @@ public:
     void updateTransmissionProbabilities();
     void advanceToken();
     void switchMode();
+    void rebuildFuzzyArea();
     double getTransmissionProbability(int nodeId) const;
     bool isInFuzzyArea(int nodeId) const;
     int getTokenHolder() const { return tokenID; }
@@ -127,6 +131,8 @@ public:
     
     // Statistics
     void printStats(int channelId);
+    void printAllStats();
+    bool hasFuzzyTokenChannels() const { return !channelStates.empty(); }
 };
 
 #endif

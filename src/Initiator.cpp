@@ -111,10 +111,10 @@ void Initiator::thread_process()
 				hub->transmission_in_progress.at(_channel_id) = false;
 				
 				// AIMD FIX: TAIL sent successfully = SUCCESS outcome
-				// Only signal from token holder to avoid multiple endStep() calls
-				if (hub->isFuzzyTokenChannel(_channel_id) && hub->isTokenHolderForChannel(_channel_id)) {
-					cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " (token holder) successfully sent TAIL on channel " 
-					     << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
+				// For FUZZY_TOKEN, the winning transmitter ends the step regardless of token holder
+				if (hub->isFuzzyTokenChannel(_channel_id)) {
+					cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " successfully sent TAIL on channel " 
+						 << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
 					hub->completeFuzzyTokenTransmission(_channel_id);
 				}
 			}
@@ -128,12 +128,14 @@ void Initiator::thread_process()
 			     << ", seq=" << flit_payload.sequence_no << ") to Hub " << destHub 
 			     << " [Error #" << total_wireless_tx_errors << "]" << endl;
 			
-			// AIMD FIX: TX-ERROR means buffer overflow/collision in AIMD terms
-			// Only signal from token holder to avoid multiple endStep() calls
-			if (hub->isFuzzyTokenChannel(_channel_id) && hub->isTokenHolderForChannel(_channel_id)) {
-				cerr << "[AIMD-COLLISION] Hub " << hub->local_id << " (token holder) detected TX-ERROR on channel " 
-				     << _channel_id << ", calling endStep(OUTCOME_COLLISION)" << endl;
-				hub->handleFuzzyTokenCollision(_channel_id);
+			// IMPORTANT: TX-ERROR means receiver buffer overflow, NOT MAC collision!
+			// Do NOT treat as AIMD collision - the channel itself is not congested
+			// The wireless channel worked fine - just receiver buffer was full
+			// Treat as SILENCE so FA doesn't shrink unnecessarily
+			if (hub->isFuzzyTokenChannel(_channel_id)) {
+				cerr << "[BUFFER-OVERFLOW] Hub " << hub->local_id << " detected buffer overflow (not MAC collision) on channel " 
+					 << _channel_id << " - ending step as SILENCE" << endl;
+				hub->handleBufferOverflow(_channel_id);
 			}
 		}
 

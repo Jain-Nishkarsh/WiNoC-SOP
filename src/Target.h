@@ -60,6 +60,19 @@ struct Target: sc_module
 
   Flit get_payload();
 
+  // Static functions to access wireless statistics
+  static int getTotalWirelessRxAttempts();
+  static int getTotalWirelessRxSuccess();
+  static int getTotalWirelessRxDropped();
+  
+  // Query buffer status for congestion-aware routing
+  bool isBufferNearFull(double threshold = 0.8) const {
+      return buffer_rx.Size() >= (buffer_rx.GetMaxBufferSize() * threshold);
+  }
+  
+  int getBufferOccupancy() const {
+      return buffer_rx.Size();
+  }
 
 };
 

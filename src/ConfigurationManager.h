@@ -61,15 +61,13 @@ namespace YAML {
     struct convert<FuzzyTokenConfig> {
         static bool decode(const Node& node, FuzzyTokenConfig& config) {
             config.preamble_cycles = node["preamble_cycles"].as<int>(1);
-            config.collision_detect_cycles = node["collision_detect_cycles"].as<int>(2);
-            config.silence_cycles = node["silence_cycles"].as<int>(1);
             config.thr1 = node["thr1"].as<double>(0.1);
             config.thr2 = node["thr2"].as<double>(0.9);
             config.initial_FA = node["initial_FA"].as<int>(10);
             config.FA_increment = node["FA_increment"].as<int>(1);
             config.FA_decrement_factor = node["FA_decrement_factor"].as<double>(0.5);
             config.pi_type = node["pi_type"].as<string>("equal");
-            config.min_transmission_prob = node["min_transmission_prob"].as<double>(0.4);  // Option 1 fix: default 40%
+            config.min_transmission_prob = node["min_transmission_prob"].as<double>(0.05);
             config.initial_token_holder = node["initial_token_holder"].as<int>(0);
             config.token_order = node["token_order"].as<string>("static");
             config.thr_is_percentage = node["thr_is_percentage"].as<bool>(true);

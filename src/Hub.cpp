@@ -850,24 +850,80 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	
 	int step_duration = current_cycle - fuzzyTokenStepStartCycle[channel];
 	
-	// CRITICAL FIX: Only token holder ends step after preamble collection phase
-	// This prevents premature resetStepState() that was clearing collision counts
+	// Determine if we have data early (used by focused-mode fast path)
+	bool hasDataEarly = !init[channel]->buffer_tx.IsEmpty();
+
+	// Focused-mode fast path:
+	// In focused mode there are no preambles; the token holder should immediately transmit if it has data.
+	// Only if the token holder has no data should we end the step as SILENCE and advance the token.
+	if (state->getMode() == FOCUSED_MODE) {
+		if (node->isTokenHolder()) {
+			if (hasDataEarly) {
+				// Start transmission now (no preamble/collision phases)
+				if (!init[channel]->buffer_tx.IsEmpty()) {
+					Flit flit = init[channel]->buffer_tx.Front();
+					static int focused_tx_count = 0;
+					focused_tx_count++;
+					cerr << "[FOCUSED-TX-START #" << focused_tx_count << "] Hub " << local_id 
+					     << " starting transmission in FOCUSED mode:" << endl
+					     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
+					     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no << endl;
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+						cout << "Hub " << local_id << " (token holder) transmitting on channel "
+						     << channel << " (focused mode)" << endl;
+					}
+
+					// Mark that transmission started in this step and notify initiator
+					fuzzyTokenTransmissionThisStep[channel] = true;
+					init[channel]->start_request_event.notify();
+					// NOTE: endStep() will be called in Initiator when TAIL flit is sent
+				}
+				return; // Do not perform preamble-based handling in focused mode
+			} else {
+				// No data to send: end step as SILENCE and advance token
+				// In FOCUSED mode, no preamble/collision overhead, so advance immediately
+				static int focused_silence_count = 0;
+				focused_silence_count++;
+				if (focused_silence_count <= 10 || focused_silence_count % 1000 == 0) {
+					cerr << "[FOCUSED-SILENCE #" << focused_silence_count << "] Token holder (Hub " << local_id
+					     << ") has no data, advancing token (SILENCE)" << endl;
+				}
+				// FOCUSED mode: immediate token advance, no silence_cycles delay
+				controller.endStep(channel, OUTCOME_SILENCE, 0);
+				// Start new step immediately
+				fuzzyTokenStepStartCycle[channel] = current_cycle;
+				fuzzyTokenActiveTransmitters[channel] = 0;
+				for (auto& pair : fuzzyTokenNodes) {
+					if (pair.first == channel) {
+						pair.second->resetStepState();
+					}
+				}
+				return; // Focused-mode step concluded
+			}
+		}
+	}
+
+	// CRITICAL FIX: Token holder coordinates step outcome after preamble collection phase (FUZZY mode only)
+	// - Handles SILENCE and COLLISION outcomes even if the token holder itself is not transmitting
+	// - Prevents multiple initiators from proceeding when the token holder is idle
 	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
-	if (node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
+	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
 		// Token holder checks for activity after preamble phase
 		int active_count = state->getActiveTransmitters();
 		
 		if (active_count == 0) {
-			// SILENCE: No preambles sent, end step after 1 cycle
+			// SILENCE: No preambles sent, end step after configured silence_cycles
 			static int silence_count = 0;
 			silence_count++;
 			if (silence_count <= 10 || silence_count % 1000 == 0) {
 				cerr << "[FUZZY-SILENCE #" << silence_count << "] Token holder (Hub " << local_id
 				     << ") detected silence after " << step_duration << " cycles, ending step" << endl;
 			}
-			controller.endStep(channel, OUTCOME_SILENCE, step_duration);
+			// Report how long this silence step took (just preamble_cycles)
+			int step_cycles = state->config.preamble_cycles;
+			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
-			// Start new step
+			// Start new step immediately
 			fuzzyTokenStepStartCycle[channel] = current_cycle;
 			fuzzyTokenActiveTransmitters[channel] = 0;
 			// Reset all nodes
@@ -876,8 +932,38 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					pair.second->resetStepState();
 				}
 			}
+		} else if (active_count > 1) {
+			// COLLISION: Multiple preambles detected - ALL hubs must hold
+			// Only process collision ONCE per step
+			static int last_collision_cycle = -1;
+			if (current_cycle != last_collision_cycle) {
+				last_collision_cycle = current_cycle;
+				
+				cerr << "[COLLISION-DETECTED] Hub " << local_id << " (token holder) detected "
+					 << active_count << " simultaneous transmitters at cycle " << current_cycle
+					 << " (step started at " << fuzzyTokenStepStartCycle[channel] << ")" << endl;
+
+				// COLLISION: Reduce FA_size, advance token, NO transmission this step
+				// Report how long this collision step took (just preamble_cycles for detection)
+				int step_cycles = state->config.preamble_cycles;
+				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
+				
+				// Start new step immediately with reduced FA
+				fuzzyTokenStepStartCycle[channel] = current_cycle;
+				fuzzyTokenActiveTransmitters[channel] = 0;
+				for (auto& pair : fuzzyTokenNodes) {
+					if (pair.first == channel) {
+						pair.second->resetStepState();
+					}
+				}
+				
+				cerr << "[COLLISION-STEP-END] Channel " << channel 
+				     << " collision detected, FA_size reduced, all hubs hold, new step starting" << endl;
+			}
+			return; // End this step immediately, no transmission
 		}
-		// Note: Collision and Success outcomes are handled when NACK is sent or TAIL completes
+		// NOTE: Success outcome is handled when TAIL completes; if exactly one preamble was seen,
+		// that node will be allowed to transmit after preamble+1 cycles (no NACK broadcast).
 	}
 	
 	bool hasData = !init[channel]->buffer_tx.IsEmpty();
@@ -951,69 +1037,21 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 				return;
 			}
 			
-			// Phase 2: Collision Detection (only token holder, after preamble phase completes)
-			if (node->isTokenHolder())
-			{
-				// Wait for preamble_cycles to ensure all preambles are registered
-				if (step_duration >= state->config.preamble_cycles)
-				{
-					// In broadcast model, token holder can see all preambles
-					if (state->hasCollision())
-					{
-						int collision_count = state->getActiveTransmitters();
-						cerr << "[COLLISION-DETECTED] Hub " << local_id << " (token holder) detected "
-						     << collision_count << " simultaneous transmitters at cycle " << current_cycle 
-						     << " (step started at " << fuzzyTokenStepStartCycle[channel] << ")" << endl;
-						
-						// Collision detected, send NACK to abort all transmissions
-						sendNack(channel);
-						node->receiveNack();
-						
-						// Broadcast NACK to all nodes that sent preambles
-						for (auto& pair : fuzzyTokenNodes) {
-							if (pair.first == channel && pair.second->hasSentPreamble()) {
-								pair.second->receiveNack();
-							}
-						}
-						
-						// PAPER-CORRECT: End step after collision_detect_cycles (2 cycles: preamble + NACK)
-						cerr << "[AIMD-COLLISION] Token holder ending step with COLLISION outcome (detected " 
-						     << collision_count << " transmitters)" << endl;
-						int collisionCycles = state->config.collision_detect_cycles;
-						controller.endStep(channel, OUTCOME_COLLISION, collisionCycles);
-						
-						// Start new step immediately
-						fuzzyTokenStepStartCycle[channel] = current_cycle + collisionCycles;
-						fuzzyTokenActiveTransmitters[channel] = 0;
-						
-						// Reset all nodes for new step
-						for (auto& pair : fuzzyTokenNodes) {
-							if (pair.first == channel) {
-								pair.second->resetStepState();
-							}
-						}
-						return;
-					}
-					
-					// No collision - exactly 1 transmitter (or 0 due to timing)
-					// Single transmitter gets green light - this check is implicit below
-					cerr << "[NO-COLLISION] Hub " << local_id << " (token holder) detected NO collision at cycle " 
-					     << current_cycle << ", active=" << state->getActiveTransmitters() << endl;
-				}
-			}
-			
-			// Phase 3: Transmission (only if preamble sent, no NACK received, and after collision check)
-			// Wait for collision detection phase to complete before starting transmission
+			// Phase 3: Transmission (only if preamble sent, no collision, and after collision check)
+			// Wait for collision detection phase to complete PLUS one cycle for token holder to broadcast result
 			if (step_duration < state->config.preamble_cycles + 1)
 			{
 				// Still in preamble/collision detection phase - don't transmit yet
+				// Token holder needs preamble_cycles to collect all preambles, 
+				// then +1 cycle to check and broadcast collision status
 				return;
 			}
 			
-			// Check if NACK was received (collision abort)
-			if (node->hasReceivedNack())
-			{
-				cerr << "[TX-ABORTED] Hub " << local_id << " received NACK, aborting transmission" << endl;
+			// Check if collision was detected this step
+			// If activeTransmitters > 1, collision was detected by token holder
+			if (state->getActiveTransmitters() > 1) {
+				cerr << "[TX-ABORTED] Hub " << local_id << " aborting - collision detected ("
+				     << state->getActiveTransmitters() << " transmitters), all hubs hold" << endl;
 				return;
 			}
 			
@@ -1113,8 +1151,12 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	int step_start = fuzzyTokenStepStartCycle[channel];
 	int transmission_cycles = current_cycle - step_start;
 	
-	// End the step with SUCCESS outcome
+	// Transmission completed successfully
+	// In the new logic, if collision occurred, endStep was already called and no transmission happened
+	// So this is always a SUCCESS case (single preamble, successful transmission)
 	controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
+	cerr << "[FUZZY-STEP-END] Channel " << channel 
+	     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
 	
 	// Reset step state for next transmission
 	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
@@ -1123,9 +1165,6 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	fuzzyTokenActiveTransmitters[channel] = 0;
 	fuzzyTokenStepStartCycle[channel] = current_cycle; // Start new step
 	fuzzyTokenTransmissionThisStep[channel] = false;
-	
-	cerr << "[FUZZY-STEP-END] Channel " << channel 
-	     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
 }
 
 bool Hub::isFuzzyTokenChannel(int channel)
@@ -1175,3 +1214,37 @@ void Hub::handleFuzzyTokenCollision(int channel)
 	     << " TX-ERROR detected (COLLISION), FA_size will decrease multiplicatively" << endl;
 }
 
+// Handle buffer overflow (not a true MAC collision)
+void Hub::handleBufferOverflow(int channel) {
+	// Check if this hub uses FUZZY_TOKEN MAC
+	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
+		return; // Not using Fuzzy Token on this channel
+	}
+	
+	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
+	FuzzyTokenChannelState* state = controller.getChannelState(channel);
+	if (!state) {
+		return;
+	}
+	
+	// Calculate step duration
+	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	int step_start = fuzzyTokenStepStartCycle[channel];
+	int step_cycles = current_cycle - step_start;
+	
+	// End the step with SILENCE outcome (not COLLISION!)
+	// Buffer overflow means receiver congestion, not channel contention
+	// FA_size should NOT shrink - wireless channel worked fine
+	controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
+	
+	// Reset step state for next transmission
+	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
+		fuzzyTokenNodes[channel]->resetStepState();
+	}
+	fuzzyTokenActiveTransmitters[channel] = 0;
+	fuzzyTokenStepStartCycle[channel] = current_cycle;
+	fuzzyTokenTransmissionThisStep[channel] = false;
+	
+	cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 
+	     << " buffer overflow detected (NOT MAC collision) - treating as SILENCE" << endl;
+}
