@@ -34,7 +34,8 @@ enum FuzzyTokenMode {
 enum StepOutcome {
     OUTCOME_COLLISION,
     OUTCOME_SUCCESS,
-    OUTCOME_SILENCE
+    OUTCOME_SILENCE,
+    OUTCOME_CONGESTION // New: TX-side congestion (treat like collision for AIMD)
 };
 
 // Per-channel Fuzzy Token state
@@ -54,6 +55,7 @@ public:
     
     // Statistics
     int totalCollisions;
+    int totalCongestions; // New: count TX-side congestion events
     int totalSuccesses;
     int totalSilences;
     int totalFuzzySteps;
@@ -74,6 +76,7 @@ public:
         numNodes(0),
         tokenRingPosition(0),
         totalCollisions(0),
+        totalCongestions(0),
         totalSuccesses(0),
         totalSilences(0),
         totalFuzzySteps(0),

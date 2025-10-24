@@ -75,6 +75,12 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             if (FA_size < 1) FA_size = 1;
             totalCollisions++;
             break;
+        case OUTCOME_CONGESTION:
+            // Treat TX-side congestion like a collision for AIMD (multiplicative decrease)
+            FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
+            if (FA_size < 1) FA_size = 1;
+            totalCongestions++;
+            break;
             
         case OUTCOME_SUCCESS:
             // No change on success
@@ -99,9 +105,11 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
         static int fa_change_count = 0;
         fa_change_count++;
         const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
                                   (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
         cerr << "[AIMD-FA-UPDATE #" << fa_change_count << "] FA_size: " << oldFA << " -> " << FA_size 
              << " (outcome=" << outcome_str << ", collisions=" << totalCollisions 
+             << ", congestions=" << totalCongestions
              << ", successes=" << totalSuccesses << ", silences=" << totalSilences << ")" << endl;
     }
 }
@@ -272,11 +280,17 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     static int step_count = 0;
     step_count++;
     const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                              (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
                               (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
     cerr << "[STEP-END #" << step_count << "] Channel " << channelId 
-         << " outcome=" << outcome_str
-         << ", active_transmitters=" << state->activeTransmittersThisStep
-         << ", FA_size=" << state->FA_size << endl;
+        << " outcome=" << outcome_str
+        << ", active_transmitters=" << state->activeTransmittersThisStep
+        << ", FA_size=" << state->FA_size
+        << ", collisions=" << state->totalCollisions
+        << ", congestions=" << state->totalCongestions
+        << ", successes=" << state->totalSuccesses
+        << ", silences=" << state->totalSilences
+        << endl;
     
     // Update fuzzy area based on outcome
     state->updateFuzzyArea(outcome);
@@ -320,11 +334,12 @@ void FuzzyTokenController::printStats(int channelId) {
     
     cout << "\n=== Fuzzy Token Statistics for Channel " << channelId << " ===" << endl;
     cout << "1. Number of collisions detected: " << state->totalCollisions << endl;
-    cout << "2. Number of steps for which focused mode is used: " << state->totalFocusedSteps << endl;
-    cout << "3. Number of steps for which fuzzy mode is used: " << state->totalFuzzySteps << endl;
+    cout << "2. Number of congestion events (TX enqueue-full): " << state->totalCongestions << endl;
+    cout << "3. Number of steps for which focused mode is used: " << state->totalFocusedSteps << endl;
+    cout << "4. Number of steps for which fuzzy mode is used: " << state->totalFuzzySteps << endl;
     
     // Print FA_size histogram
-    cout << "4. Histogram of FA_size:" << endl;
+    cout << "5. Histogram of FA_size:" << endl;
     if (state->FA_size_histogram.empty()) {
         cout << "   (No FA_size data recorded)" << endl;
     } else {

@@ -627,6 +627,10 @@ void Hub::tileToAntennaProcess()
 					else
 					{
 						LOG << "Buffer Full: Cannot move flit " << flit << " from buffer_from_tile["<<i<<"] to buffer_tx["<<channel<<"] " << endl;
+						// Trigger congestion handling only on new packet arrival (HEAD flit)
+						if (flit.flit_type == FLIT_TYPE_HEAD) {
+							handleFuzzyTokenCongestion(channel);
+						}
 						//init[channel]->buffer_tx.Print();
 					}
 				}
@@ -1247,4 +1251,38 @@ void Hub::handleBufferOverflow(int channel) {
 	
 	cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 
 	     << " buffer overflow detected (NOT MAC collision) - treating as SILENCE" << endl;
+}
+
+// Handle TX-side congestion: enqueue-full when a new packet arrives
+// Treat like a COLLISION for AIMD (multiplicative decrease of FA)
+void Hub::handleFuzzyTokenCongestion(int channel)
+{
+	// Only applicable for FUZZY_TOKEN channels
+	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
+		return;
+	}
+
+	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
+	FuzzyTokenChannelState* state = controller.getChannelState(channel);
+	if (!state) {
+		return;
+	}
+
+	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	int step_start = fuzzyTokenStepStartCycle[channel];
+	int step_cycles = current_cycle - step_start;
+
+	// End the step with CONGESTION outcome
+	controller.endStep(channel, OUTCOME_CONGESTION, step_cycles);
+
+	// Reset step for next attempt
+	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
+		fuzzyTokenNodes[channel]->resetStepState();
+	}
+	fuzzyTokenActiveTransmitters[channel] = 0;
+	fuzzyTokenStepStartCycle[channel] = current_cycle;
+	fuzzyTokenTransmissionThisStep[channel] = false;
+
+	cerr << "[FUZZY-CONGESTION-END] Channel " << channel
+		 << " TX enqueue-full on HEAD detected (CONGESTION), FA_size will decrease multiplicatively" << endl;
 }
