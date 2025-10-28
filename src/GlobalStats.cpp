@@ -528,6 +528,11 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
     if (fuzzyController.hasFuzzyTokenChannels()) {
         fuzzyController.printAllStats();
     }
+    
+    // Also print WiNoC stats for TOKEN_PACKET (and general WiNoC usage)
+	if (GlobalParams::use_winoc) {
+		showWiNoCStatsTokenPacket(out);
+	}
 
 }
 
@@ -718,4 +723,79 @@ double GlobalStats::getReceivedIdealFlitRatio()
 		    GlobalParams::max_packet_size)/2 * total_cycles * GlobalParams::n_delta_tiles);
     }
     return ratio;
+}
+
+void GlobalStats::showWiNoCStatsTokenPacket(std::ostream & out)
+{
+	// Summary per hub across channels
+	out << std::endl;
+	out << "% WiNoC (Token Packet) Transmission Stats per Hub" << std::endl;
+	out << "% HUB\tAttempts\tSuccesses\tErrors\tEnqueueFull(HEAD)\tFromTile(mean,max)\tToTile(mean,max)\tAntennaTX(mean,max)\tAntennaRX(mean,max)" << std::endl;
+
+	for (std::map<int, HubConfig>::iterator it = GlobalParams::hub_configuration.begin();
+		 it != GlobalParams::hub_configuration.end(); ++it)
+	{
+		int hub_id = it->first;
+		std::map<int,Hub*>::const_iterator hi = noc->hub.find(hub_id);
+		if (hi == noc->hub.end()) continue;
+		Hub* h = hi->second;
+
+		double from_tile_sum_mean = 0.0; unsigned int from_tile_cnt = 0; unsigned int from_tile_max = 0;
+		double to_tile_sum_mean   = 0.0; unsigned int to_tile_cnt   = 0; unsigned int to_tile_max   = 0;
+		double tx_sum_mean        = 0.0; unsigned int tx_cnt        = 0; unsigned int tx_max        = 0;
+		double rx_sum_mean        = 0.0; unsigned int rx_cnt        = 0; unsigned int rx_max        = 0;
+
+		// Aggregate from_tile/to_tile
+		for (int p = 0; p < h->num_ports; ++p) {
+			for (int vc = 0; vc < GlobalParams::n_virtual_channels; ++vc) {
+				from_tile_sum_mean += h->buffer_from_tile[p][vc].getMeanOccupancy();
+				from_tile_cnt++;
+				unsigned int mft = h->buffer_from_tile[p][vc].getMaxRecordedOccupancy();
+				if (mft > from_tile_max) from_tile_max = mft;
+
+				to_tile_sum_mean += h->buffer_to_tile[p][vc].getMeanOccupancy();
+				to_tile_cnt++;
+				unsigned int mtt = h->buffer_to_tile[p][vc].getMaxRecordedOccupancy();
+				if (mtt > to_tile_max) to_tile_max = mtt;
+			}
+		}
+
+		// Antenna TX
+		for (unsigned int k = 0; k < h->txChannels.size(); ++k) {
+			int ch = h->txChannels[k];
+			if (h->init.find(ch) == h->init.end()) continue;
+			Buffer& btx = h->init[ch]->buffer_tx;
+			tx_sum_mean += btx.getMeanOccupancy();
+			tx_cnt++;
+			unsigned int mt = btx.getMaxRecordedOccupancy();
+			if (mt > tx_max) tx_max = mt;
+		}
+
+		// Antenna RX
+		for (unsigned int k = 0; k < h->rxChannels.size(); ++k) {
+			int ch = h->rxChannels[k];
+			if (h->target.find(ch) == h->target.end()) continue;
+			Buffer& brx = h->target[ch]->buffer_rx;
+			rx_sum_mean += brx.getMeanOccupancy();
+			rx_cnt++;
+			unsigned int mr = brx.getMaxRecordedOccupancy();
+			if (mr > rx_max) rx_max = mr;
+		}
+
+		double from_tile_mean = from_tile_cnt ? (from_tile_sum_mean / (double)from_tile_cnt) : 0.0;
+		double to_tile_mean   = to_tile_cnt   ? (to_tile_sum_mean   / (double)to_tile_cnt)   : 0.0;
+		double tx_mean        = tx_cnt        ? (tx_sum_mean        / (double)tx_cnt)        : 0.0;
+		double rx_mean        = rx_cnt        ? (rx_sum_mean        / (double)rx_cnt)        : 0.0;
+
+		out << "\t" << hub_id
+			<< "\t" << h->tx_attempts_total
+			<< "\t" << h->tx_success_total
+			<< "\t" << h->tx_errors_total
+			<< "\t" << h->tx_enqueue_full_events_total
+			<< "\t" << std::fixed << std::setprecision(2) << from_tile_mean << "," << from_tile_max
+			<< "\t" << std::fixed << std::setprecision(2) << to_tile_mean   << "," << to_tile_max
+			<< "\t" << std::fixed << std::setprecision(2) << tx_mean        << "," << tx_max
+			<< "\t" << std::fixed << std::setprecision(2) << rx_mean        << "," << rx_max
+			<< std::endl;
+	}
 }

@@ -80,6 +80,11 @@ class Buffer {
     
     void SaveOccupancyAndTime();
     void UpdateMeanOccupancy();
+
+  public:
+    // Lightweight getters for stats reporting
+    inline double getMeanOccupancy() const { return mean_occupancy; }
+    inline unsigned int getMaxRecordedOccupancy() const { return max_occupancy; }
 };
 
 typedef Buffer BufferBank[MAX_VIRTUAL_CHANNELS];

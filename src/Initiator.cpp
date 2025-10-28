@@ -59,8 +59,10 @@ void Initiator::thread_process()
 		////////////////////////////////////////////////////////////////////////////////
 
 
-		LOG << " *** Starting transmission of " << flit_payload << " to reach HUB_" << destHub <<  endl;
-		total_wireless_tx_attempts++;
+	LOG << " *** Starting transmission of " << flit_payload << " to reach HUB_" << destHub <<  endl;
+	total_wireless_tx_attempts++;
+	// Per-hub aggregated attempts
+	hub->tx_attempts_total++;
 		
 		cerr << "[INITIATOR-TX #" << total_wireless_tx_attempts << "] Hub " << hub->local_id 
 		     << " sending flit: type=" << flit_payload.flit_type 
@@ -88,6 +90,7 @@ void Initiator::thread_process()
 		if (!trans->is_response_error() )
 		{
 			total_wireless_tx_success++;
+			hub->tx_success_total++;
 			cerr << "[TX-SUCCESS] Hub " << hub->local_id << " sent flit type=" << flit_payload.flit_type 
 			     << " (HEAD=" << FLIT_TYPE_HEAD << ", BODY=" << FLIT_TYPE_BODY << ", TAIL=" << FLIT_TYPE_TAIL << ")" << endl;
 			if (flit_payload.flit_type == FLIT_TYPE_HEAD) {
@@ -122,6 +125,7 @@ void Initiator::thread_process()
 		else
 		{
 			total_wireless_tx_errors++;
+			hub->tx_errors_total++;
 			LOG << " WARNING: incomplete transaction " << endl;
 			cerr << "[TX-ERROR] Hub " << hub->local_id << " FAILED to send flit (src=" << flit_payload.src_id 
 			     << ", dst=" << flit_payload.dst_id << ", type=" << flit_payload.flit_type 

@@ -397,6 +397,12 @@ vector < int > Router::routingFunction(const RouteData & route_data)
 		// Let DISTANCE_AWARE algorithm make the wireless vs wired decision
 		return routingAlgorithm->route(this, route_data);
 	}
+
+	// Let DISTANCE_CONGESTION_AWARE fully control the wireless vs wired decision
+	if (GlobalParams::routing_algorithm == "DISTANCE_CONGESTION_AWARE")
+	{
+		return routingAlgorithm->route(this, route_data);
+	}
 	
 	if (GlobalParams::use_winoc)
 	{

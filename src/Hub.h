@@ -95,6 +95,12 @@ SC_MODULE(Hub)
     map<int,int> buffer_to_tile_poweroff_cycles;
 
     int wireless_communications_counter;
+    // WiNoC transmission stats (aggregated per hub across channels)
+    int tx_attempts_total;
+    int tx_success_total;
+    int tx_errors_total;
+    int tx_enqueue_full_events_total; // counts HEAD enqueue-full events
+    std::map<int,int> tx_enqueue_full_events_by_channel; // channel -> count
 
     // Constructor
 
@@ -187,6 +193,10 @@ SC_MODULE(Hub)
 	total_sleep_cycles = 0;
 	total_ttxoff_cycles = 0;
 	wireless_communications_counter = 0;
+        tx_attempts_total = 0;
+        tx_success_total = 0;
+        tx_errors_total = 0;
+        tx_enqueue_full_events_total = 0;
     }
 
 
@@ -206,11 +216,17 @@ SC_MODULE(Hub)
     // Handle TX-side congestion (enqueue-full on HEAD) -> treat like collision for AIMD
     void handleFuzzyTokenCongestion(int channel);
     
-    // Handle buffer overflow (treat as SILENCE, not COLLISION)
+    // Handle RX buffer overflow for FUZZY: treat as CONGESTION (AIMD decrease)
     void handleBufferOverflow(int channel);
+
+    // Lightweight global TX congestion visibility for routing
+    // Indicates if any TX channel buffer at a hub is currently full
+    static bool isTxCongestedForHub(int hubId);
+    static void updateTxCongestionFlag(int hubId, bool congested);
 
     private:
     map<int,int> flit_transmission_cycles;
+    static std::map<int,bool> s_tx_congested;
 
     void txRadioProcessTokenPacket(int channel);
     void txRadioProcessTokenHold(int channel);
@@ -229,6 +245,7 @@ SC_MODULE(Hub)
     map<int, int> fuzzyTokenActiveTransmitters; // channel -> count of active preambles
     map<int, int> fuzzyTokenStepStartCycle; // channel -> cycle when current step started (Option 2)
     map<int, bool> fuzzyTokenTransmissionThisStep; // channel -> any transmission in current step (Option 2)
+    map<int, bool> fuzzyTokenDeferredCongestion; // channel -> deferred congestion to apply at step end
     
     void initializeFuzzyToken(int channel);
     bool detectMultiplePreambles(int channel);

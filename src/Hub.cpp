@@ -629,6 +629,9 @@ void Hub::tileToAntennaProcess()
 						LOG << "Buffer Full: Cannot move flit " << flit << " from buffer_from_tile["<<i<<"] to buffer_tx["<<channel<<"] " << endl;
 						// Trigger congestion handling only on new packet arrival (HEAD flit)
 						if (flit.flit_type == FLIT_TYPE_HEAD) {
+							// Count enqueue-full event for Token Packet (and generally for visibility)
+							tx_enqueue_full_events_total++;
+							tx_enqueue_full_events_by_channel[channel]++;
 							handleFuzzyTokenCongestion(channel);
 						}
 						//init[channel]->buffer_tx.Print();
@@ -641,6 +644,14 @@ void Hub::tileToAntennaProcess()
 			}
 
 		}// for all the ports
+
+		// Update global TX congestion flag for this hub (any channel full => congested)
+		bool anyTxFull = false;
+		for (unsigned int ci = 0; ci < txChannels.size(); ++ci) {
+			int ch = txChannels[ci];
+			if (init[ch]->buffer_tx.IsFull()) { anyTxFull = true; break; }
+		}
+		Hub::updateTxCongestionFlag(local_id, anyTxFull);
 	}
 
 	for (int i = 0; i < num_ports; i++)
@@ -686,6 +697,19 @@ void Hub::tileToAntennaProcess()
 	// IMPORTANT: do not move from here
 	// The txPowerManager assumes that all flit buffer write have been done
 	updateTxPower();
+}
+
+// Static map initialization
+std::map<int,bool> Hub::s_tx_congested;
+
+bool Hub::isTxCongestedForHub(int hubId) {
+	std::map<int,bool>::iterator it = s_tx_congested.find(hubId);
+	if (it == s_tx_congested.end()) return false;
+	return it->second;
+}
+
+void Hub::updateTxCongestionFlag(int hubId, bool congested) {
+	s_tx_congested[hubId] = congested;
 }
 
 int Hub::selectChannel(int src_hub, int dst_hub) const
@@ -745,6 +769,7 @@ void Hub::initializeFuzzyToken(int channel)
 	fuzzyTokenActiveTransmitters[channel] = 0;
 	fuzzyTokenStepStartCycle[channel] = 0;  // Option 2
 	fuzzyTokenTransmissionThisStep[channel] = false;  // Option 2
+	fuzzyTokenDeferredCongestion[channel] = false; // no deferred congestion initially
 	
 	// Register this channel with the global controller if not already done
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
@@ -1155,12 +1180,17 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	int step_start = fuzzyTokenStepStartCycle[channel];
 	int transmission_cycles = current_cycle - step_start;
 	
-	// Transmission completed successfully
-	// In the new logic, if collision occurred, endStep was already called and no transmission happened
-	// So this is always a SUCCESS case (single preamble, successful transmission)
-	controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
-	cerr << "[FUZZY-STEP-END] Channel " << channel 
-	     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
+	// Transmission completed; apply deferred congestion if any
+	if (fuzzyTokenDeferredCongestion[channel]) {
+		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles);
+		cerr << "[FUZZY-STEP-END] Channel " << channel 
+		     << " transmission complete with deferred CONGESTION, FA_size will decrease" << endl;
+		fuzzyTokenDeferredCongestion[channel] = false; // consume the deferred flag
+	} else {
+		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
+		cerr << "[FUZZY-STEP-END] Channel " << channel 
+		     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
+	}
 	
 	// Reset step state for next transmission
 	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
@@ -1218,7 +1248,7 @@ void Hub::handleFuzzyTokenCollision(int channel)
 	     << " TX-ERROR detected (COLLISION), FA_size will decrease multiplicatively" << endl;
 }
 
-// Handle buffer overflow (not a true MAC collision)
+// Handle buffer overflow (receiver-side congestion, not a true MAC collision)
 void Hub::handleBufferOverflow(int channel) {
 	// Check if this hub uses FUZZY_TOKEN MAC
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
@@ -1236,10 +1266,10 @@ void Hub::handleBufferOverflow(int channel) {
 	int step_start = fuzzyTokenStepStartCycle[channel];
 	int step_cycles = current_cycle - step_start;
 	
-	// End the step with SILENCE outcome (not COLLISION!)
-	// Buffer overflow means receiver congestion, not channel contention
-	// FA_size should NOT shrink - wireless channel worked fine
-	controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
+	// Treat RX overflow as CONGESTION for AIMD:
+	// - It's not a MAC collision, but it indicates the wireless path is over-feeding the receiver.
+	// - Decrease FA_size subtractively to reduce offered load next steps.
+	controller.endStep(channel, OUTCOME_CONGESTION, step_cycles);
 	
 	// Reset step state for next transmission
 	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
@@ -1249,8 +1279,8 @@ void Hub::handleBufferOverflow(int channel) {
 	fuzzyTokenStepStartCycle[channel] = current_cycle;
 	fuzzyTokenTransmissionThisStep[channel] = false;
 	
-	cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 
-	     << " buffer overflow detected (NOT MAC collision) - treating as SILENCE" << endl;
+    cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 
+	    << " buffer overflow detected (NOT MAC collision) - treating as CONGESTION (AIMD decrease)" << endl;
 }
 
 // Handle TX-side congestion: enqueue-full when a new packet arrives
@@ -1268,21 +1298,12 @@ void Hub::handleFuzzyTokenCongestion(int channel)
 		return;
 	}
 
-	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
-	int step_start = fuzzyTokenStepStartCycle[channel];
-	int step_cycles = current_cycle - step_start;
-
-	// End the step with CONGESTION outcome
-	controller.endStep(channel, OUTCOME_CONGESTION, step_cycles);
-
-	// Reset step for next attempt
-	if (fuzzyTokenNodes.find(channel) != fuzzyTokenNodes.end()) {
-		fuzzyTokenNodes[channel]->resetStepState();
+	// Defer congestion handling to end of current/next transmission step
+	if (!fuzzyTokenDeferredCongestion[channel]) {
+		fuzzyTokenDeferredCongestion[channel] = true; // coalesce multiple events into one
+		cerr << "[FUZZY-CONGESTION-DEFER] Channel " << channel
+		     << " HEAD enqueue-full detected; deferring FA decrease until step end" << endl;
+	} else {
+		// Already deferred for this step; nothing to do
 	}
-	fuzzyTokenActiveTransmitters[channel] = 0;
-	fuzzyTokenStepStartCycle[channel] = current_cycle;
-	fuzzyTokenTransmissionThisStep[channel] = false;
-
-	cerr << "[FUZZY-CONGESTION-END] Channel " << channel
-		 << " TX enqueue-full on HEAD detected (CONGESTION), FA_size will decrease multiplicatively" << endl;
 }

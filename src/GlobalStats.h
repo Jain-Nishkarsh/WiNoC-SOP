@@ -99,6 +99,7 @@ class GlobalStats {
   private:
     const NoC *noc;
     void updatePowerBreakDown(map<string,double> &dst,PowerBreakdown* src);
+    void showWiNoCStatsTokenPacket(std::ostream & out);
 };
 
 #endif

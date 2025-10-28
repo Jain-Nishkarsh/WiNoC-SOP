@@ -75,9 +75,11 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             if (FA_size < 1) FA_size = 1;
             totalCollisions++;
             break;
+            
         case OUTCOME_CONGESTION:
-            // Treat TX-side congestion like a collision for AIMD (multiplicative decrease)
+            // Subtractive decrease
             FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
+            // FA_size -= config.FA_increment;
             if (FA_size < 1) FA_size = 1;
             totalCongestions++;
             break;
