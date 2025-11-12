@@ -14,7 +14,7 @@ n_virtual_channels: 1
 routing_algorithm: DISTANCE_AWARE
 routing_table_filename: ""
 dyad_threshold: 0.6
-da_threshold: 0
+da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
@@ -106,21 +106,21 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            collision_detect_cycles: 2
-            # conservative value to reduce over-aggressive attempts under congestion
-            silence_cycles: 0
-            thr1: 0.2
-            # cap FA earlier to favor focused mode under load
-            thr2: 0.5
-            thr_is_percentage: true
-            initial_FA: 8
+            # Switch to FOCUSED when FA shrinks below 25% of nodes (4 hubs)
+            thr1: 4
+            # Switch back to FUZZY when FA grows above 37.5% of nodes (6 hubs)
+            thr2: 6
+            thr_is_percentage: false
+            # Start with moderate FA for better initial throughput
+            initial_FA: 2
+            # Faster growth to reach optimal contention quickly
             FA_increment: 1
-            # baseline multiplicative decrease
-            FA_decrement_factor: 0.4
-            # use gaussian transmission prob around token holder
+            # Moderate shrink only for TRUE collisions (rare now)
+            FA_decrement_factor: 0.5
+            # Gaussian distribution around token holder
             pi_type: gaussian
-            # no floor: only FA-centered nodes contend
-            min_transmission_prob: 0
+            # Small floor to give edge nodes some chance
+            min_transmission_prob: 0.05
             initial_token_holder: 0
             token_order: static
 
@@ -131,7 +131,7 @@ stats_warm_up_time: 0
 
 min_packet_size: 2
 max_packet_size: 4
-packet_injection_rate: 0.001
+packet_injection_rate: 0.002
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""

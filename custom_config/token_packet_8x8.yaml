@@ -10,7 +10,7 @@ n_virtual_channels: 1
 routing_algorithm: XY
 routing_table_filename: ""
 dyad_threshold: 0.6
-# da_threshold: 0
+# da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
@@ -48,14 +48,14 @@ RadioChannels:
 
 clock_period_ps: 1000
 reset_time: 100
-simulation_time: 50000
+simulation_time: 5000
 stats_warm_up_time: 0
 
 min_packet_size: 2
 max_packet_size: 4
-packet_injection_rate: 0.001
+packet_injection_rate: 0.003
 probability_of_retransmission: 0.01
-traffic_distribution: TRAFFIC_RANDOM
+traffic_distribution: TRAFFIC_TRANSPOSE1
 traffic_table_filename: ""
 
 use_winoc: true

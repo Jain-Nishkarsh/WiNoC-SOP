@@ -4,3 +4,4 @@ noxim
 .DS_Store
 results/
 .vscode
+!evaluate.ipynb

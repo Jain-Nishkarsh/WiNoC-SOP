@@ -26,6 +26,41 @@ Energy:
         - [64, 64, 6.0e-2, 1.0e-11, 0, 0.9e-11  ]     # interpolated
         - [64, 128, 1.14e-1 , 1.92e-11, 0, 1.71e-11 ]     # interpolated
 
+        # Extrapolated entries for larger buffer depths (Depth, ItemSize, Leakage, Push, Front, Pop)
+        - [128, 16,  2.53e-2, 3.91e-12, 0, 3.92e-12 ]     # extrapolated
+        - [128, 32,  2.78e-2, 7.50e-12, 0, 7.24e-12 ]     # extrapolated
+        - [128, 64,  9.60e-2, 1.52e-11, 0, 1.38e-11 ]     # extrapolated
+        - [128, 128, 1.82e-1, 2.91e-11, 0, 2.63e-11 ]     # extrapolated
+
+        - [256, 16,  4.04e-2, 5.93e-12, 0, 6.03e-12 ]     # extrapolated
+        - [256, 32,  4.45e-2, 1.14e-11, 0, 1.11e-11 ]     # extrapolated
+        - [256, 64,  1.54e-1, 2.30e-11, 0, 2.13e-11 ]     # extrapolated
+        - [256, 128, 2.92e-1, 4.41e-11, 0, 4.05e-11 ]     # extrapolated
+
+        - [512, 16,  6.48e-2, 8.97e-12, 0, 9.28e-12 ]     # extrapolated
+        - [512, 32,  6.99e-2, 1.72e-11, 0, 1.72e-11 ]     # extrapolated
+        - [512, 64,  2.46e-1, 3.48e-11, 0, 3.28e-11 ]     # extrapolated
+        - [512, 128, 4.68e-1, 6.67e-11, 0, 6.23e-11 ]     # extrapolated
+
+        - [1024, 16, 1.04e-1, 1.36e-11, 0, 1.43e-11 ]     # extrapolated
+        - [1024, 32, 1.12e-1, 2.61e-11, 0, 2.64e-11 ]     # extrapolated
+        - [1024, 64, 3.93e-1, 5.27e-11, 0, 5.04e-11 ]     # extrapolated
+        - [1024, 128,7.47e-1, 1.01e-10, 0, 9.57e-11 ]     # extrapolated
+
+        - [2048, 16, 1.66e-1, 2.06e-11, 0, 2.20e-11 ]     # extrapolated
+        - [2048, 32, 1.83e-1, 3.95e-11, 0, 4.05e-11 ]     # extrapolated
+        - [2048, 64, 6.29e-1, 7.97e-11, 0, 7.74e-11 ]     # extrapolated
+        - [2048, 128,1.20e+0, 1.53e-10, 0, 1.48e-10 ]     # extrapolated
+
+        - [4096, 16, 2.64e-1, 3.12e-11, 0, 3.39e-11 ]     # extrapolated
+        - [4096, 32, 2.79e-1, 5.91e-11, 0, 6.25e-11 ]     # extrapolated
+        - [4096, 64, 1.01e+0, 1.21e-10, 0, 1.19e-10 ]     # extrapolated
+        - [4096, 128,1.91e+0, 2.32e-10, 0, 2.27e-10 ]     # extrapolated
+
+        - [8192, 16, 4.23e-1, 4.74e-11, 0, 5.21e-11 ]     # extrapolated
+        - [8192, 32, 4.68e-1, 9.10e-11, 0, 9.66e-11 ]     # extrapolated
+        - [8192, 64, 1.61e+0, 1.84e-10, 0, 1.84e-10 ]     # extrapolated
+        - [8192, 128,3.06e+0, 3.54e-10, 0, 3.50e-10 ]     # extrapolated
 
     # LinkBitLine energy in the form [ Length (mm) Leakage Dynamic ] 
     # Energy(J) for a single bitline. Total flit energy will 
@@ -71,6 +106,7 @@ Energy:
             ODD_EVEN:    [1.32e-4, 6.60e-14]
             TABLE_BASED: [2.40e-4, 12.00e-14]
             DISTANCE_AWARE:     [1.35e-4, 6.75e-14]
+            DISTANCE_CONGESTION_AWARE: [1.35e-4, 6.75e-14]
 
 
         selection:
