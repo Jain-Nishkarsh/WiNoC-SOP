@@ -501,7 +501,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -868,15 +868,36 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	
 	// PHASE 1: Update ready bitmap - mark if this hub has packets to send
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
-	state->setHubReady(local_id, hasPacketToSend);
 	
-	// PHASE 1: Log ready bitmap updates for testing
-	static int bitmap_update_count = 0;
-	bitmap_update_count++;
-	if (bitmap_update_count <= 200) { // Log first 200 updates
-		cerr << "[READY-BITMAP-UPDATE #" << bitmap_update_count << "] Hub " << local_id 
-		     << " ready=" << (hasPacketToSend ? "YES" : "NO") 
-		     << " (buffer_tx.IsEmpty=" << init[channel]->buffer_tx.IsEmpty() << ")" << endl;
+	// Check if this channel uses FUZZY_TOKEN_PLUS (with ready-count trigger)
+	string macPolicy = token_ring->getPolicy(channel).first;
+	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS);
+	
+	if (usePlusFeatures) {
+		state->setHubReady(local_id, hasPacketToSend);
+		
+		// PHASE 1: Log ready bitmap updates for testing
+		static int bitmap_update_count = 0;
+		bitmap_update_count++;
+		if (bitmap_update_count <= 200) { // Log first 200 updates
+			cerr << "[READY-BITMAP-UPDATE #" << bitmap_update_count << "] Hub " << local_id 
+			     << " ready=" << (hasPacketToSend ? "YES" : "NO") 
+			     << " (buffer_tx.IsEmpty=" << init[channel]->buffer_tx.IsEmpty() << ")" << endl;
+		}
+	}
+	
+	// PHASE 2: Token holder updates ready history and performs proactive mode switching
+	// This happens once per cycle after all hubs have updated their ready bits
+	if (usePlusFeatures && node->isTokenHolder()) {
+		static int last_history_update_cycle = -1;
+		int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+		
+		// Update history only once per cycle (token holder coordinates)
+		if (current_cycle != last_history_update_cycle) {
+			state->updateReadyHistory();
+			state->checkAndSwitchModeProactive();
+			last_history_update_cycle = current_cycle;
+		}
 	}
 	
 	// PAPER-CORRECT: Synchronous step coordination
