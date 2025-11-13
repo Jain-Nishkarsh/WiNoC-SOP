@@ -90,6 +90,7 @@ using namespace std;
 #define TOKEN_MAX_HOLD         "TOKEN_MAX_HOLD"
 #define TOKEN_PACKET           "TOKEN_PACKET"
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
+#define FUZZY_TOKEN_PLUS       "FUZZY_TOKEN_PLUS"
 
 // Fuzzy Token configuration
 typedef struct {
@@ -104,6 +105,12 @@ typedef struct {
     int initial_token_holder;   // Initial token holder node ID
     string token_order;         // Token order: "static" or "pseudo_random"
     bool thr_is_percentage;     // True if thr1/thr2 are percentages of N
+    
+    // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
+    int ready_history_window;   // W: Number of cycles to track ready counts (default: 6)
+    int fuzzy_trigger_count;    // K: Consecutive windows for FUZZY switch (default: 4)
+    int focused_trigger_count;  // M: Consecutive windows for FOCUSED switch (default: 4)
+    int min_mode_hold_cycles;   // MIN_HOLD: Minimum cycles before mode switch (default: 10)
 } FuzzyTokenConfig;
 
 typedef struct {

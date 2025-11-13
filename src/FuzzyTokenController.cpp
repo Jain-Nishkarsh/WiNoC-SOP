@@ -26,6 +26,16 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     numNodes = num_nodes;
     transmissionProb.resize(numNodes, 0.0);
     
+    // PHASE 1: Initialize ready bitmap
+    ready_bitmap.resize(numNodes, false);
+    
+    // PHASE 2: Initialize ready-count trigger parameters from config
+    ready_history_window = config.ready_history_window;
+    fuzzy_trigger_count = config.fuzzy_trigger_count;
+    focused_trigger_count = config.focused_trigger_count;
+    min_mode_hold_cycles = config.min_mode_hold_cycles;
+    cycles_in_current_mode = 0;
+    
     // Initialize token ring order
     tokenRingOrder = nodeIds;
     if (config.token_order == "pseudo_random") {
@@ -61,7 +71,11 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         cout << "FuzzyTokenChannelState initialized: numNodes=" << numNodes 
              << ", FA_size=" << FA_size 
              << ", tokenID=" << tokenID 
-             << ", mode=" << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << endl;
+             << ", mode=" << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
+             << ", W=" << ready_history_window
+             << ", K=" << fuzzy_trigger_count
+             << ", M=" << focused_trigger_count
+             << ", MIN_HOLD=" << min_mode_hold_cycles << endl;
     }
 }
 
@@ -306,6 +320,9 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     // Reset transmission counters for next step
     state->resetStepState();
     
+    // PHASE 1: Reset ready bitmap for next cycle
+    state->resetReadyBitmap();
+    
     // Update step cycle count
     state->currentStepCycles = stepCycles;
 }
@@ -386,6 +403,175 @@ void FuzzyTokenChannelState::registerTransmission(int hubId) {
 void FuzzyTokenChannelState::resetStepState() {
     transmittingHubsThisStep.clear();
     activeTransmittersThisStep = 0;
+}
+
+// PHASE 1: Ready bitmap management implementations
+void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
+    if (hubId >= 0 && hubId < numNodes) {
+        ready_bitmap[hubId] = isReady;
+    }
+}
+
+bool FuzzyTokenChannelState::isHubReady(int hubId) const {
+    if (hubId >= 0 && hubId < numNodes) {
+        return ready_bitmap[hubId];
+    }
+    return false;
+}
+
+void FuzzyTokenChannelState::resetReadyBitmap() {
+    // PHASE 1: Log ready hubs before reset (for debugging)
+    static int reset_count = 0;
+    reset_count++;
+    if (reset_count % 100 == 0 || GlobalParams::verbose_mode == VERBOSE_HIGH) {
+        int ready_count = countReadyHubs();
+        if (ready_count > 0) {
+            cerr << "[READY-BITMAP-RESET #" << reset_count << "] Ready hubs count: " << ready_count << " (";
+            for (int i = 0; i < numNodes; i++) {
+                if (ready_bitmap[i]) {
+                    cerr << "Hub" << i << " ";
+                }
+            }
+            cerr << ")" << endl;
+        }
+    }
+    
+    std::fill(ready_bitmap.begin(), ready_bitmap.end(), false);
+}
+
+int FuzzyTokenChannelState::countReadyHubs() const {
+    int count = 0;
+    for (bool ready : ready_bitmap) {
+        if (ready) count++;
+    }
+    return count;
+}
+
+// PHASE 1: Log ready bitmap for testing
+void FuzzyTokenChannelState::logReadyBitmap(int currentCycle) const {
+    cerr << "[READY-BITMAP] Cycle " << currentCycle << ": ";
+    for (int i = 0; i < numNodes; i++) {
+        cerr << (ready_bitmap[i] ? "1" : "0");
+    }
+    cerr << " (Ready hubs: ";
+    bool first = true;
+    for (int i = 0; i < numNodes; i++) {
+        if (ready_bitmap[i]) {
+            if (!first) cerr << ",";
+            cerr << "Hub" << i;
+            first = false;
+        }
+    }
+    if (first) cerr << "NONE";
+    cerr << ")" << endl;
+}
+
+// PHASE 2: Ready-count trigger implementations
+void FuzzyTokenChannelState::updateReadyHistory() {
+    int ready_count = countReadyHubs();
+    ready_history.push_back(ready_count);
+    
+    // Maintain sliding window of size W
+    if (ready_history.size() > (size_t)ready_history_window) {
+        ready_history.pop_front();
+    }
+    
+    static int history_update_count = 0;
+    history_update_count++;
+    if (history_update_count <= 50 || history_update_count % 100 == 0) {
+        cerr << "[READY-HISTORY-UPDATE #" << history_update_count << "] ready_count=" << ready_count 
+             << ", history_size=" << ready_history.size() << ", history=[";
+        for (size_t i = 0; i < ready_history.size(); i++) {
+            if (i > 0) cerr << ",";
+            cerr << ready_history[i];
+        }
+        cerr << "]" << endl;
+    }
+}
+
+bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
+    // Need at least K consecutive windows in history
+    if (ready_history.size() < (size_t)fuzzy_trigger_count) {
+        return false;
+    }
+    
+    // CORRECTED LOGIC: Switch to FUZZY when traffic is LOW/SPARSE
+    // Low traffic → Can use FUZZY mode's probabilistic transmission
+    // Check last K windows: all must have ≤1 ready hub (light traffic)
+    for (size_t i = ready_history.size() - fuzzy_trigger_count; i < ready_history.size(); i++) {
+        if (ready_history[i] > 1) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
+    // Need at least M consecutive windows in history
+    if (ready_history.size() < (size_t)focused_trigger_count) {
+        return false;
+    }
+    
+    // CORRECTED LOGIC: Switch to FOCUSED when traffic is HIGH
+    // High traffic → Use FOCUSED mode's deterministic token ring (prevents collisions)
+    // Check last M windows: all must have >1 ready hub (high traffic)
+    for (size_t i = ready_history.size() - focused_trigger_count; i < ready_history.size(); i++) {
+        if (ready_history[i] <= 1) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+void FuzzyTokenChannelState::checkAndSwitchModeProactive() {
+    FuzzyTokenMode oldMode = periodMode;
+    int cyclesHeld = cycles_in_current_mode;  // Save BEFORE resetting
+    
+    // Increment cycles in current mode
+    cycles_in_current_mode++;
+    
+    // DEBUG: Log trigger evaluation
+    static int eval_count = 0;
+    eval_count++;
+    bool shouldFuzzy = shouldSwitchToFuzzy();
+    bool shouldFocused = shouldSwitchToFocused();
+    if (eval_count <= 100 && (shouldFuzzy || shouldFocused)) {
+        cerr << "[TRIGGER-EVAL #" << eval_count << "] Mode=" << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
+             << ", cycles_held=" << cycles_in_current_mode 
+             << ", shouldFuzzy=" << shouldFuzzy 
+             << ", shouldFocused=" << shouldFocused << endl;
+    }
+    
+    // HYSTERESIS: Prevent rapid switching by requiring minimum hold time
+    if (cycles_in_current_mode < min_mode_hold_cycles) {
+        return;  // Stay in current mode until minimum hold time is met
+    }
+    
+    if (shouldSwitchToFuzzy() && periodMode != FUZZY_MODE) {
+        periodMode = FUZZY_MODE;
+        cycles_in_current_mode = 0;  // Reset counter
+        cerr << "[PROACTIVE-MODE-SWITCH] FOCUSED -> FUZZY (light traffic detected, using probabilistic transmission)" << endl;
+    } else if (shouldSwitchToFocused() && periodMode != FOCUSED_MODE) {
+        periodMode = FOCUSED_MODE;
+        cycles_in_current_mode = 0;  // Reset counter
+        cerr << "[PROACTIVE-MODE-SWITCH] FUZZY -> FOCUSED (high traffic detected, using deterministic token ring)" << endl;
+    }
+    
+    if (oldMode != periodMode) {
+        static int mode_switch_count = 0;
+        mode_switch_count++;
+        cerr << "[PROACTIVE-MODE-SWITCH #" << mode_switch_count << "] Mode changed: "
+             << (oldMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << " -> "
+             << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
+             << " (held for " << cyclesHeld << " cycles, history=[";
+        for (size_t i = 0; i < ready_history.size(); i++) {
+            if (i > 0) cerr << ",";
+            cerr << ready_history[i];
+        }
+        cerr << "])" << endl;
+    }
 }
 
 void FuzzyTokenController::printAllStats() {

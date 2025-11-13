@@ -71,6 +71,13 @@ namespace YAML {
             config.initial_token_holder = node["initial_token_holder"].as<int>(0);
             config.token_order = node["token_order"].as<string>("static");
             config.thr_is_percentage = node["thr_is_percentage"].as<bool>(true);
+            
+            // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
+            config.ready_history_window = node["ready_history_window"].as<int>(6);
+            config.fuzzy_trigger_count = node["fuzzy_trigger_count"].as<int>(4);
+            config.focused_trigger_count = node["focused_trigger_count"].as<int>(4);
+            config.min_mode_hold_cycles = node["min_mode_hold_cycles"].as<int>(10);
+            
             return true;
         }
     };

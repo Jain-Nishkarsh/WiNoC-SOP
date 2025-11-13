@@ -501,7 +501,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -866,6 +866,40 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		return;
 	}
 	
+	// PHASE 1: Update ready bitmap - mark if this hub has packets to send
+	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
+	
+	// Check if this channel uses FUZZY_TOKEN_PLUS (with ready-count trigger)
+	string macPolicy = token_ring->getPolicy(channel).first;
+	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS);
+	
+	if (usePlusFeatures) {
+		state->setHubReady(local_id, hasPacketToSend);
+		
+		// PHASE 1: Log ready bitmap updates for testing
+		static int bitmap_update_count = 0;
+		bitmap_update_count++;
+		if (bitmap_update_count <= 200) { // Log first 200 updates
+			cerr << "[READY-BITMAP-UPDATE #" << bitmap_update_count << "] Hub " << local_id 
+			     << " ready=" << (hasPacketToSend ? "YES" : "NO") 
+			     << " (buffer_tx.IsEmpty=" << init[channel]->buffer_tx.IsEmpty() << ")" << endl;
+		}
+	}
+	
+	// PHASE 2: Token holder updates ready history and performs proactive mode switching
+	// This happens once per cycle after all hubs have updated their ready bits
+	if (usePlusFeatures && node->isTokenHolder()) {
+		static int last_history_update_cycle = -1;
+		int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+		
+		// Update history only once per cycle (token holder coordinates)
+		if (current_cycle != last_history_update_cycle) {
+			state->updateReadyHistory();
+			state->checkAndSwitchModeProactive();
+			last_history_update_cycle = current_cycle;
+		}
+	}
+	
 	// PAPER-CORRECT: Synchronous step coordination
 	// Steps end after: 1 cycle (silence), 2 cycles (collision), C cycles (success)
 	// Only token holder coordinates step end to ensure ALL nodes register preambles first
@@ -886,6 +920,13 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// In focused mode there are no preambles; the token holder should immediately transmit if it has data.
 	// Only if the token holder has no data should we end the step as SILENCE and advance the token.
 	if (state->getMode() == FOCUSED_MODE) {
+		// PHASE 1: Log ready bitmap for first 20 FOCUSED steps (testing)
+		static int focused_step_log_count = 0;
+		if (node->isTokenHolder() && focused_step_log_count < 20) {
+			state->logReadyBitmap(current_cycle);
+			focused_step_log_count++;
+		}
+		
 		if (node->isTokenHolder()) {
 			if (hasDataEarly) {
 				// Start transmission now (no preamble/collision phases)
@@ -937,6 +978,13 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// - Prevents multiple initiators from proceeding when the token holder is idle
 	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
 	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
+		// PHASE 1: Log ready bitmap for first 20 steps (testing)
+		static int step_log_count = 0;
+		if (step_log_count < 20) {
+			state->logReadyBitmap(current_cycle);
+			step_log_count++;
+		}
+		
 		// Token holder checks for activity after preamble phase
 		int active_count = state->getActiveTransmitters();
 		

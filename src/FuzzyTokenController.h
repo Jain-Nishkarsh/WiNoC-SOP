@@ -16,6 +16,7 @@
 #include <map>
 #include <set>
 #include <bitset>
+#include <deque>
 #include "GlobalParams.h"
 #include "DataStructs.h"
 
@@ -68,6 +69,18 @@ public:
     int activeTransmittersThisStep;
     set<int> transmittingHubsThisStep;
     
+    // PHASE 1: Ready bit piggybacking - tracks which hubs are ready to send
+    vector<bool> ready_bitmap;
+    
+    // PHASE 2: Ready-count trigger - tracks ready count history for proactive mode switching
+    // CORRECTED LOGIC: High traffic → FOCUSED (deterministic), Low traffic → FUZZY (probabilistic)
+    deque<int> ready_history;
+    int ready_history_window;       // W: sliding window size (from config)
+    int fuzzy_trigger_count;        // K: consecutive windows with ≤1 ready for FUZZY (from config)
+    int focused_trigger_count;      // M: consecutive windows with >1 ready for FOCUSED (from config)
+    int cycles_in_current_mode;     // Hysteresis: prevent rapid switching
+    int min_mode_hold_cycles;       // Minimum cycles to stay in a mode (from config)
+    
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -81,7 +94,8 @@ public:
         totalSilences(0),
         totalFuzzySteps(0),
         totalFocusedSteps(0),
-        activeTransmittersThisStep(0)
+        activeTransmittersThisStep(0),
+        cycles_in_current_mode(0)
     {
         fuzzyArea.reset();
     }
@@ -103,6 +117,19 @@ public:
     bool hasCollision() const { return activeTransmittersThisStep > 1; }
     bool hasSilence() const { return activeTransmittersThisStep == 0; }
     int getActiveTransmitters() const { return activeTransmittersThisStep; }
+    
+    // PHASE 1: Ready bitmap management methods
+    void setHubReady(int hubId, bool isReady);
+    bool isHubReady(int hubId) const;
+    void resetReadyBitmap();
+    int countReadyHubs() const;
+    void logReadyBitmap(int currentCycle) const; // PHASE 1: For testing
+    
+    // PHASE 2: Ready-count trigger methods
+    void updateReadyHistory();
+    bool shouldSwitchToFuzzy() const;
+    bool shouldSwitchToFocused() const;
+    void checkAndSwitchModeProactive();
 };
 
 // Global Fuzzy Token Controller (manages all channels)
