@@ -68,6 +68,9 @@ public:
     int activeTransmittersThisStep;
     set<int> transmittingHubsThisStep;
     
+    // PHASE 1: Ready bit piggybacking - tracks which hubs are ready to send
+    vector<bool> ready_bitmap;
+    
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -103,6 +106,13 @@ public:
     bool hasCollision() const { return activeTransmittersThisStep > 1; }
     bool hasSilence() const { return activeTransmittersThisStep == 0; }
     int getActiveTransmitters() const { return activeTransmittersThisStep; }
+    
+    // PHASE 1: Ready bitmap management methods
+    void setHubReady(int hubId, bool isReady);
+    bool isHubReady(int hubId) const;
+    void resetReadyBitmap();
+    int countReadyHubs() const;
+    void logReadyBitmap(int currentCycle) const; // PHASE 1: For testing
 };
 
 // Global Fuzzy Token Controller (manages all channels)

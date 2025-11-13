@@ -26,6 +26,9 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     numNodes = num_nodes;
     transmissionProb.resize(numNodes, 0.0);
     
+    // PHASE 1: Initialize ready bitmap
+    ready_bitmap.resize(numNodes, false);
+    
     // Initialize token ring order
     tokenRingOrder = nodeIds;
     if (config.token_order == "pseudo_random") {
@@ -306,6 +309,9 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     // Reset transmission counters for next step
     state->resetStepState();
     
+    // PHASE 1: Reset ready bitmap for next cycle
+    state->resetReadyBitmap();
+    
     // Update step cycle count
     state->currentStepCycles = stepCycles;
 }
@@ -386,6 +392,67 @@ void FuzzyTokenChannelState::registerTransmission(int hubId) {
 void FuzzyTokenChannelState::resetStepState() {
     transmittingHubsThisStep.clear();
     activeTransmittersThisStep = 0;
+}
+
+// PHASE 1: Ready bitmap management implementations
+void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
+    if (hubId >= 0 && hubId < numNodes) {
+        ready_bitmap[hubId] = isReady;
+    }
+}
+
+bool FuzzyTokenChannelState::isHubReady(int hubId) const {
+    if (hubId >= 0 && hubId < numNodes) {
+        return ready_bitmap[hubId];
+    }
+    return false;
+}
+
+void FuzzyTokenChannelState::resetReadyBitmap() {
+    // PHASE 1: Log ready hubs before reset (for debugging)
+    static int reset_count = 0;
+    reset_count++;
+    if (reset_count % 100 == 0 || GlobalParams::verbose_mode == VERBOSE_HIGH) {
+        int ready_count = countReadyHubs();
+        if (ready_count > 0) {
+            cerr << "[READY-BITMAP-RESET #" << reset_count << "] Ready hubs count: " << ready_count << " (";
+            for (int i = 0; i < numNodes; i++) {
+                if (ready_bitmap[i]) {
+                    cerr << "Hub" << i << " ";
+                }
+            }
+            cerr << ")" << endl;
+        }
+    }
+    
+    std::fill(ready_bitmap.begin(), ready_bitmap.end(), false);
+}
+
+int FuzzyTokenChannelState::countReadyHubs() const {
+    int count = 0;
+    for (bool ready : ready_bitmap) {
+        if (ready) count++;
+    }
+    return count;
+}
+
+// PHASE 1: Log ready bitmap for testing
+void FuzzyTokenChannelState::logReadyBitmap(int currentCycle) const {
+    cerr << "[READY-BITMAP] Cycle " << currentCycle << ": ";
+    for (int i = 0; i < numNodes; i++) {
+        cerr << (ready_bitmap[i] ? "1" : "0");
+    }
+    cerr << " (Ready hubs: ";
+    bool first = true;
+    for (int i = 0; i < numNodes; i++) {
+        if (ready_bitmap[i]) {
+            if (!first) cerr << ",";
+            cerr << "Hub" << i;
+            first = false;
+        }
+    }
+    if (first) cerr << "NONE";
+    cerr << ")" << endl;
 }
 
 void FuzzyTokenController::printAllStats() {
