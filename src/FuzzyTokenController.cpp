@@ -389,11 +389,15 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         << ", silences=" << state->totalSilences
         << endl;
     
-    // Update fuzzy area based on outcome
-    state->updateFuzzyArea(outcome);
+    // Update fuzzy area based on outcome (ONLY in FUZZY mode where FA is actually used)
+    // In FOCUSED mode, only token holder transmits, so FA_size adjustments are unnecessary
+    if (state->periodMode == FUZZY_MODE) {
+        state->updateFuzzyArea(outcome);
+    }
     
     // PHASE 3: Advance token (use smart jump for FUZZY_TOKEN_JUMP_PLUS in FOCUSED mode)
     bool useJumpFeatures = (state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
+    bool usePlusFeatures = (state->macPolicy == FUZZY_TOKEN_PLUS || state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
     if (useJumpFeatures && inFocusedMode) {
@@ -403,7 +407,10 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     }
     
     // Check for mode switch
-    state->switchMode();
+    // PLUS protocols use proactive mode switching (ready-count trigger), so skip reactive switching
+    if (!usePlusFeatures) {
+        state->switchMode(); // Only use reactive FA-based switching for baseline FUZZY_TOKEN
+    }
     
     // Reset transmission counters for next step
     state->resetStepState();
