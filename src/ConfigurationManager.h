@@ -78,6 +78,9 @@ namespace YAML {
             config.focused_trigger_count = node["focused_trigger_count"].as<int>(4);
             config.min_mode_hold_cycles = node["min_mode_hold_cycles"].as<int>(10);
             
+            // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
+            config.max_park_cycles = node["max_park_cycles"].as<int>(4);
+            
             return true;
         }
     };

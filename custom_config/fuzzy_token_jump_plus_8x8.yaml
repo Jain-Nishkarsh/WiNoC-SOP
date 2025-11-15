@@ -1,6 +1,7 @@
-# FUZZY TOKEN PLUS - 8x8 Mesh with Ready-Count Trigger
-# Enhanced version with proactive mode switching based on traffic prediction
-# Uses ready bitmap and history tracking to switch modes before collisions occur
+# FUZZY TOKEN JUMP PLUS - 8x8 Mesh with ALL enhancements
+# Phase 1: Ready bitmap piggybacking
+# Phase 2: Ready-count trigger (proactive mode switching)
+# Phase 3: Ready-aware jump (smart token movement)
 
 topology: MESH
 mesh_dim_x: 8
@@ -14,6 +15,7 @@ n_virtual_channels: 1
 routing_algorithm: XY
 routing_table_filename: ""
 dyad_threshold: 0.6
+# da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
@@ -47,7 +49,7 @@ RadioChannels:
     defaults:
         data_rate: 16
         ber: [0, 0]
-        mac_policy: [FUZZY_TOKEN_PLUS]
+        mac_policy: [FUZZY_TOKEN_JUMP_PLUS]
         fuzzy_token:
             preamble_cycles: 0
             thr1: 0.2
@@ -64,12 +66,14 @@ RadioChannels:
             initial_token_holder: 0
             token_order: static
             
-            # Ready-count trigger parameters (Phase 2 ONLY for FUZZY_TOKEN_PLUS)
+            # Ready-count trigger parameters (Phase 2)
             ready_history_window: 6      # W: sliding window size for ready count history
             fuzzy_trigger_count: 4       # K: consecutive windows with ≤1 ready to switch to FUZZY
             focused_trigger_count: 4     # M: consecutive windows with >1 ready to switch to FOCUSED
             min_mode_hold_cycles: 10     # MIN_HOLD: minimum cycles before allowing mode switch
-            # Note: Phase 3 (ready-aware jump) is NOT enabled for FUZZY_TOKEN_PLUS
+            
+            # Ready-aware jump parameters (Phase 3)
+            max_park_cycles: 4           # T_max: maximum cycles to park token when no ready hubs
 
 clock_period_ps: 1000
 reset_time: 100

@@ -53,6 +53,7 @@ public:
     FuzzyTokenConfig config;
     vector<int> tokenRingOrder; // Static or pseudo-random order
     int tokenRingPosition; // Current position in the ring
+    string macPolicy; // MAC policy for this channel (FUZZY_TOKEN or FUZZY_TOKEN_PLUS)
     
     // Statistics
     int totalCollisions;
@@ -81,6 +82,10 @@ public:
     int cycles_in_current_mode;     // Hysteresis: prevent rapid switching
     int min_mode_hold_cycles;       // Minimum cycles to stay in a mode (from config)
     
+    // PHASE 3: Ready-aware jump (smart token movement)
+    int park_counter;               // Counts cycles token has been parked (no ready hubs)
+    int max_park_cycles;            // T_max: Maximum cycles to park before normal advance (from config)
+    
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -95,7 +100,8 @@ public:
         totalFuzzySteps(0),
         totalFocusedSteps(0),
         activeTransmittersThisStep(0),
-        cycles_in_current_mode(0)
+        cycles_in_current_mode(0),
+        park_counter(0)
     {
         fuzzyArea.reset();
     }
@@ -130,6 +136,10 @@ public:
     bool shouldSwitchToFuzzy() const;
     bool shouldSwitchToFocused() const;
     void checkAndSwitchModeProactive();
+    
+    // PHASE 3: Ready-aware jump methods
+    int findNextReadyToken(int currentPos) const;
+    void advanceTokenSmart(); // Smart version using ready bitmap
 };
 
 // Global Fuzzy Token Controller (manages all channels)
@@ -150,7 +160,7 @@ public:
     }
     
     void registerChannel(int channelId, const FuzzyTokenConfig& config, 
-                        int numNodes, const vector<int>& nodeIds);
+                        int numNodes, const vector<int>& nodeIds, const string& policy);
     
     FuzzyTokenChannelState* getChannelState(int channelId);
     

@@ -91,6 +91,7 @@ using namespace std;
 #define TOKEN_PACKET           "TOKEN_PACKET"
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
 #define FUZZY_TOKEN_PLUS       "FUZZY_TOKEN_PLUS"
+#define FUZZY_TOKEN_JUMP_PLUS  "FUZZY_TOKEN_JUMP_PLUS"
 
 // Fuzzy Token configuration
 typedef struct {
@@ -111,6 +112,9 @@ typedef struct {
     int fuzzy_trigger_count;    // K: Consecutive windows for FUZZY switch (default: 4)
     int focused_trigger_count;  // M: Consecutive windows for FOCUSED switch (default: 4)
     int min_mode_hold_cycles;   // MIN_HOLD: Minimum cycles before mode switch (default: 10)
+    
+    // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
+    int max_park_cycles;        // T_max: Maximum cycles to park token when no ready hubs (default: 4)
 } FuzzyTokenConfig;
 
 typedef struct {

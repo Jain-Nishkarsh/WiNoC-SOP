@@ -36,6 +36,10 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     min_mode_hold_cycles = config.min_mode_hold_cycles;
     cycles_in_current_mode = 0;
     
+    // PHASE 3: Initialize ready-aware jump parameters from config
+    max_park_cycles = config.max_park_cycles;
+    park_counter = 0;
+    
     // Initialize token ring order
     tokenRingOrder = nodeIds;
     if (config.token_order == "pseudo_random") {
@@ -75,7 +79,8 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
              << ", W=" << ready_history_window
              << ", K=" << fuzzy_trigger_count
              << ", M=" << focused_trigger_count
-             << ", MIN_HOLD=" << min_mode_hold_cycles << endl;
+             << ", MIN_HOLD=" << min_mode_hold_cycles
+             << ", T_max=" << max_park_cycles << endl;
     }
 }
 
@@ -205,6 +210,80 @@ void FuzzyTokenChannelState::advanceToken() {
     }
 }
 
+// PHASE 3: Ready-aware jump - Find next ready token holder
+int FuzzyTokenChannelState::findNextReadyToken(int currentPos) const {
+    // Search circularly for the next ready hub
+    for (int offset = 1; offset <= numNodes; offset++) {
+        int nextPos = (currentPos + offset) % tokenRingOrder.size();
+        int nextHubId = tokenRingOrder[nextPos];
+        
+        if (isHubReady(nextHubId)) {
+            return nextPos;
+        }
+    }
+    // No ready hub found
+    return -1;
+}
+
+// PHASE 3: Smart token advancement with ready-aware jump
+void FuzzyTokenChannelState::advanceTokenSmart() {
+    int oldTokenID = tokenID;
+    int oldPosition = tokenRingPosition;
+    
+    // Try to find next ready hub
+    int nextReadyPos = findNextReadyToken(tokenRingPosition);
+    
+    if (nextReadyPos == -1) {
+        // Nobody ready → park token or advance normally after timeout
+        park_counter++;
+        
+        static int park_event_count = 0;
+        if (park_counter <= 10 || park_event_count % 50 == 0) {
+            cerr << "[TOKEN-PARK] No ready hubs found, parking token (park_counter=" 
+                 << park_counter << ", T_max=" << max_park_cycles << ")" << endl;
+        }
+        park_event_count++;
+        
+        if (park_counter > max_park_cycles) {
+            // Timeout: advance normally to prevent starvation
+            tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
+            tokenID = tokenRingOrder[tokenRingPosition];
+            park_counter = 0; // Reset counter after forced advance
+            
+            if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+                cerr << "[TOKEN-PARK-TIMEOUT] Forced advance after " << max_park_cycles 
+                     << " cycles: " << oldTokenID << " → " << tokenID << endl;
+            }
+        }
+        // Note: When parking (park_counter <= max_park_cycles), token stays in place
+        // We still need to rebuild FA/probs in case state changed
+    } else {
+        // Found a ready hub → jump to it
+        tokenRingPosition = nextReadyPos;
+        tokenID = tokenRingOrder[tokenRingPosition];
+        park_counter = 0; // Reset parking counter
+        
+        // Log jumps (skip sequential moves for clarity)
+        if (nextReadyPos != (oldPosition + 1) % tokenRingOrder.size()) {
+            static int jump_count = 0;
+            jump_count++;
+            if (jump_count <= 50 || jump_count % 100 == 0) {
+                cerr << "[TOKEN-JUMP #" << jump_count << "] " 
+                     << oldTokenID << " → " << tokenID 
+                     << " (skipped " << (nextReadyPos > oldPosition ? 
+                                         nextReadyPos - oldPosition - 1 : 
+                                         tokenRingOrder.size() - oldPosition + nextReadyPos - 1)
+                     << " hubs)" << endl;
+            }
+        }
+    }
+    
+    // Recenter FA around new token holder
+    rebuildFuzzyArea();
+    // Update probabilities with new center
+    updateTransmissionProbabilities();
+}
+
 void FuzzyTokenChannelState::switchMode() {
     // Check thresholds
     double thr1_value = config.thr1;
@@ -266,18 +345,20 @@ bool FuzzyTokenChannelState::isInFuzzyArea(int nodeId) const {
 // FuzzyTokenController implementation
 
 void FuzzyTokenController::registerChannel(int channelId, const FuzzyTokenConfig& config, 
-                                           int numNodes, const vector<int>& nodeIds) {
+                                           int numNodes, const vector<int>& nodeIds,
+                                           const string& policy) {
     if (channelStates.find(channelId) != channelStates.end()) {
         delete channelStates[channelId];
     }
     
     FuzzyTokenChannelState* state = new FuzzyTokenChannelState();
     state->initialize(config, numNodes, nodeIds);
+    state->macPolicy = policy; // Store MAC policy
     channelStates[channelId] = state;
     
     if (GlobalParams::verbose_mode >= VERBOSE_LOW) {
         cout << "FuzzyTokenController: Registered channel " << channelId 
-             << " with " << numNodes << " nodes" << endl;
+             << " with " << numNodes << " nodes, policy=" << policy << endl;
     }
 }
 
@@ -311,8 +392,15 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     // Update fuzzy area based on outcome
     state->updateFuzzyArea(outcome);
     
-    // Advance token (happens at end of every step)
-    state->advanceToken();
+    // PHASE 3: Advance token (use smart jump for FUZZY_TOKEN_JUMP_PLUS in FOCUSED mode)
+    bool useJumpFeatures = (state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
+    bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
+    
+    if (useJumpFeatures && inFocusedMode) {
+        state->advanceTokenSmart(); // Use ready-aware jumping
+    } else {
+        state->advanceToken(); // Standard sequential advancement
+    }
     
     // Check for mode switch
     state->switchMode();

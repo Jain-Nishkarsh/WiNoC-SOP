@@ -501,7 +501,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -797,7 +797,10 @@ void Hub::initializeFuzzyToken(int channel)
 		sort(allHubs.begin(), allHubs.end());
 		allHubs.erase(unique(allHubs.begin(), allHubs.end()), allHubs.end());
 		
-		controller.registerChannel(channel, config, allHubs.size(), allHubs);
+		// Get MAC policy for this channel
+		string macPolicy = token_ring->getPolicy(channel).first;
+		
+		controller.registerChannel(channel, config, allHubs.size(), allHubs, macPolicy);
 		
 		if (GlobalParams::verbose_mode >= VERBOSE_LOW)
 		{
@@ -869,9 +872,10 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// PHASE 1: Update ready bitmap - mark if this hub has packets to send
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
 	
-	// Check if this channel uses FUZZY_TOKEN_PLUS (with ready-count trigger)
+	// Check which PLUS features to enable based on MAC policy
 	string macPolicy = token_ring->getPolicy(channel).first;
-	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS);
+	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS);  // Phase 2: Ready-count trigger
+	bool useJumpFeatures = (macPolicy == FUZZY_TOKEN_JUMP_PLUS);  // Phase 3: Ready-aware jump
 	
 	if (usePlusFeatures) {
 		state->setHubReady(local_id, hasPacketToSend);
