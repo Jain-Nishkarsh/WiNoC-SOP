@@ -29,14 +29,14 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     
     // Initialize ready-count trigger parameters
     ready_history_window = config.ready_history_window;
-    fuzzy_trigger_count = config.fuzzy_trigger_count;
-    focused_trigger_count = config.focused_trigger_count;
-    min_mode_hold_cycles = config.min_mode_hold_cycles;
-    cycles_in_current_mode = 0;
+    fuzzy_ready_threshold = config.fuzzy_ready_threshold;
+    focused_ready_threshold = config.focused_ready_threshold;
+    fuzzy_consecutive_windows = config.fuzzy_consecutive_windows;
+    focused_consecutive_windows = config.focused_consecutive_windows;
     
     // Initialize ready-aware jump parameters
-    max_park_cycles = config.max_park_cycles;
-    park_counter = 0;
+    jump_cooldown = config.jump_cooldown;
+    cycles_since_last_jump = config.jump_cooldown + 1;
     
     // Initialize token ring order
     tokenRingOrder = nodeIds;
@@ -178,25 +178,35 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     int oldPosition = tokenRingPosition;
     int nextReadyPos = findNextReadyToken(tokenRingPosition);
     
+    cycles_since_last_jump++;
+    
     if (nextReadyPos == -1) {
-        park_counter++;
-        if (park_counter > max_park_cycles) {
-            tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
-            tokenID = tokenRingOrder[tokenRingPosition];
-            park_counter = 0;
-        }
-    } else {
-        tokenRingPosition = nextReadyPos;
+        // No ready hub found, advance sequentially
+        tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
         tokenID = tokenRingOrder[tokenRingPosition];
-        park_counter = 0;
+    } else {
+        int nextSequentialPos = (oldPosition + 1) % tokenRingOrder.size();
+        bool wouldJump = (nextReadyPos != nextSequentialPos);
         
-        if (GlobalParams::verbose_mode == VERBOSE_HIGH && 
-            nextReadyPos != (oldPosition + 1) % tokenRingOrder.size()) {
-            int skipped = (nextReadyPos > oldPosition) ? 
-                         nextReadyPos - oldPosition - 1 : 
-                         tokenRingOrder.size() - oldPosition + nextReadyPos - 1;
-            cerr << "[TOKEN-JUMP] " << tokenRingOrder[oldPosition] << " → " << tokenID 
-                 << " (skipped " << skipped << " hubs)" << endl;
+        if (wouldJump && cycles_since_last_jump < jump_cooldown) {
+            // Jump cooldown active, advance sequentially instead
+            tokenRingPosition = nextSequentialPos;
+            tokenID = tokenRingOrder[tokenRingPosition];
+        } else {
+            // Jump to ready hub
+            tokenRingPosition = nextReadyPos;
+            tokenID = tokenRingOrder[tokenRingPosition];
+            
+            if (wouldJump) {
+                cycles_since_last_jump = 0;
+                if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+                    int skipped = (nextReadyPos > oldPosition) ? 
+                                 nextReadyPos - oldPosition - 1 : 
+                                 tokenRingOrder.size() - oldPosition + nextReadyPos - 1;
+                    cerr << "[TOKEN-JUMP] " << tokenRingOrder[oldPosition] << " → " << tokenID 
+                         << " (skipped " << skipped << " hubs)" << endl;
+                }
+            }
         }
     }
     
@@ -413,12 +423,12 @@ void FuzzyTokenChannelState::updateReadyHistory() {
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
-    if (ready_history.size() < (size_t)fuzzy_trigger_count) {
+    if (ready_history.size() < (size_t)fuzzy_consecutive_windows) {
         return false;
     }
     
-    for (size_t i = ready_history.size() - fuzzy_trigger_count; i < ready_history.size(); i++) {
-        if (ready_history[i] > 1) {
+    for (size_t i = ready_history.size() - fuzzy_consecutive_windows; i < ready_history.size(); i++) {
+        if (ready_history[i] > fuzzy_ready_threshold) {
             return false;
         }
     }
@@ -427,12 +437,12 @@ bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
-    if (ready_history.size() < (size_t)focused_trigger_count) {
+    if (ready_history.size() < (size_t)focused_consecutive_windows) {
         return false;
     }
     
-    for (size_t i = ready_history.size() - focused_trigger_count; i < ready_history.size(); i++) {
-        if (ready_history[i] <= 1) {
+    for (size_t i = ready_history.size() - focused_consecutive_windows; i < ready_history.size(); i++) {
+        if (ready_history[i] <= focused_ready_threshold) {
             return false;
         }
     }
@@ -441,23 +451,13 @@ bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
 }
 
 void FuzzyTokenChannelState::checkAndSwitchModeProactive() {
-    FuzzyTokenMode oldMode = periodMode;
-    
-    cycles_in_current_mode++;
-    
-    if (cycles_in_current_mode < min_mode_hold_cycles) {
-        return;
-    }
-    
     if (shouldSwitchToFuzzy() && periodMode != FUZZY_MODE) {
         periodMode = FUZZY_MODE;
-        cycles_in_current_mode = 0;
         if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
             cerr << "[MODE-SWITCH] FOCUSED -> FUZZY" << endl;
         }
     } else if (shouldSwitchToFocused() && periodMode != FOCUSED_MODE) {
         periodMode = FOCUSED_MODE;
-        cycles_in_current_mode = 0;
         if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
             cerr << "[MODE-SWITCH] FUZZY -> FOCUSED" << endl;
         }

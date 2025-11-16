@@ -52,9 +52,6 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN_JUMP_PLUS]
         fuzzy_token:
             preamble_cycles: 0
-            thr1: 0.2
-            thr2: 0.5
-            thr_is_percentage: true
 
             initial_FA: 8
             FA_increment: 1
@@ -67,13 +64,14 @@ RadioChannels:
             token_order: static
             
             # Ready-count trigger parameters (Phase 2)
-            ready_history_window: 6      # W: sliding window size for ready count history
-            fuzzy_trigger_count: 4       # K: consecutive windows with ≤1 ready to switch to FUZZY
-            focused_trigger_count: 4     # M: consecutive windows with >1 ready to switch to FOCUSED
-            min_mode_hold_cycles: 10     # MIN_HOLD: minimum cycles before allowing mode switch
+            ready_history_window: 4           # W: sliding window size for ready count history
+            fuzzy_ready_threshold: 3          # K: max ready hubs for FUZZY (≤3 ready)
+            focused_ready_threshold: 10        # M: min ready hubs for FOCUSED (>8 ready)
+            fuzzy_consecutive_windows: 2      # Consecutive windows ≤K to trigger FUZZY
+            focused_consecutive_windows: 2    # Consecutive windows >M to trigger FOCUSED
             
             # Ready-aware jump parameters (Phase 3)
-            max_park_cycles: 4           # T_max: maximum cycles to park token when no ready hubs
+            jump_cooldown: 10             # Minimum token cycles between jumps (0 = no cooldown)
 
 clock_period_ps: 1000
 reset_time: 100

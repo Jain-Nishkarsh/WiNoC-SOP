@@ -72,14 +72,14 @@ public:
     // Ready-count trigger (Phase 2)
     deque<int> ready_history;
     int ready_history_window;
-    int fuzzy_trigger_count;
-    int focused_trigger_count;
-    int cycles_in_current_mode;
-    int min_mode_hold_cycles;
+    int fuzzy_ready_threshold;
+    int focused_ready_threshold;
+    int fuzzy_consecutive_windows;
+    int focused_consecutive_windows;
     
-    // Ready-aware jump (Phase 3)
-    int park_counter;
-    int max_park_cycles;
+    // Ready-aware jump
+    int cycles_since_last_jump;
+    int jump_cooldown;
     
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
@@ -95,8 +95,7 @@ public:
         totalFuzzySteps(0),
         totalFocusedSteps(0),
         activeTransmittersThisStep(0),
-        cycles_in_current_mode(0),
-        park_counter(0)
+        cycles_since_last_jump(0)
     {
         fuzzyArea.reset();
     }

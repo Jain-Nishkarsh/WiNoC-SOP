@@ -108,13 +108,14 @@ typedef struct {
     bool thr_is_percentage;     // True if thr1/thr2 are percentages of N
     
     // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
-    int ready_history_window;   // W: Number of cycles to track ready counts (default: 6)
-    int fuzzy_trigger_count;    // K: Consecutive windows for FUZZY switch (default: 4)
-    int focused_trigger_count;  // M: Consecutive windows for FOCUSED switch (default: 4)
-    int min_mode_hold_cycles;   // MIN_HOLD: Minimum cycles before mode switch (default: 10)
+    int ready_history_window;        // W: Number of cycles to track ready counts (default: 6)
+    int fuzzy_ready_threshold;       // K: Max ready hubs for FUZZY mode (≤K ready) (default: 3)
+    int focused_ready_threshold;     // M: Min ready hubs for FOCUSED mode (>M ready) (default: 8)
+    int fuzzy_consecutive_windows;   // Consecutive windows ≤K to trigger FUZZY (default: 4)
+    int focused_consecutive_windows; // Consecutive windows >M to trigger FOCUSED (default: 4)
     
     // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
-    int max_park_cycles;        // T_max: Maximum cycles to park token when no ready hubs (default: 4)
+    int jump_cooldown;          // Minimum token cycles between jumps (default: 0 = no cooldown)
 } FuzzyTokenConfig;
 
 typedef struct {
