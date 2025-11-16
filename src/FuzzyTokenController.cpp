@@ -283,11 +283,9 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         cerr << "[STEP-END] Channel " << channelId << " outcome=" << outcome_str << endl;
     }
     
-    // Update fuzzy area based on outcome (ONLY in FUZZY mode where FA is actually used)
-    // In FOCUSED mode, only token holder transmits, so FA_size adjustments are unnecessary
-    if (state->periodMode == FUZZY_MODE) {
-        state->updateFuzzyArea(outcome);
-    }
+    // Always update FA_size to track contention (needed for baseline FUZZY_TOKEN mode switching)
+    // FA_size is used in FUZZY mode for fuzzy area, and checked by switchMode() for reactive switching
+    state->updateFuzzyArea(outcome);
     
     bool useJumpFeatures = (state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
     bool usePlusFeatures = (state->macPolicy == FUZZY_TOKEN_PLUS || state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);

@@ -12,10 +12,10 @@ r2h_link_length: 2.0
 r2r_link_length: 1.0
 n_virtual_channels: 1
 
-routing_algorithm: DISTANCE_AWARE
+routing_algorithm: XY
 routing_table_filename: ""
 dyad_threshold: 0.6
-da_threshold: 5
+# da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
