@@ -31,60 +31,55 @@ enum FuzzyTokenMode {
     FOCUSED_MODE
 };
 
-// Step outcome types
 enum StepOutcome {
     OUTCOME_COLLISION,
     OUTCOME_SUCCESS,
     OUTCOME_SILENCE,
-    OUTCOME_CONGESTION // New: TX-side congestion (treat like collision for AIMD)
+    OUTCOME_CONGESTION
 };
 
-// Per-channel Fuzzy Token state
 class FuzzyTokenChannelState {
 public:
     FuzzyTokenMode periodMode;
     int tokenID;
     int FA_size;
     bitset<MAX_FUZZY_TOKEN_NODES> fuzzyArea;
-    vector<double> transmissionProb; // p[i] for each node
+    vector<double> transmissionProb;
     int currentStepCycles;
     
     int numNodes;
     FuzzyTokenConfig config;
-    vector<int> tokenRingOrder; // Static or pseudo-random order
-    int tokenRingPosition; // Current position in the ring
-    string macPolicy; // MAC policy for this channel (FUZZY_TOKEN or FUZZY_TOKEN_PLUS)
+    vector<int> tokenRingOrder;
+    int tokenRingPosition;
+    string macPolicy;
     
     // Statistics
     int totalCollisions;
-    int totalCongestions; // New: count TX-side congestion events
+    int totalCongestions;
     int totalSuccesses;
     int totalSilences;
     int totalFuzzySteps;
     int totalFocusedSteps;
-    
-    // Histogram of FA_size (key: FA_size, value: count of steps)
     map<int, int> FA_size_histogram;
     
-    // Global transmission tracking (for broadcast collision detection)
+    // Transmission tracking
     int activeTransmittersThisStep;
     set<int> transmittingHubsThisStep;
     
-    // PHASE 1: Ready bit piggybacking - tracks which hubs are ready to send
+    // Ready bitmap (Phase 1)
     vector<bool> ready_bitmap;
     
-    // PHASE 2: Ready-count trigger - tracks ready count history for proactive mode switching
-    // CORRECTED LOGIC: High traffic → FOCUSED (deterministic), Low traffic → FUZZY (probabilistic)
+    // Ready-count trigger (Phase 2)
     deque<int> ready_history;
-    int ready_history_window;       // W: sliding window size (from config)
-    int fuzzy_trigger_count;        // K: consecutive windows with ≤1 ready for FUZZY (from config)
-    int focused_trigger_count;      // M: consecutive windows with >1 ready for FOCUSED (from config)
-    int cycles_in_current_mode;     // Hysteresis: prevent rapid switching
-    int min_mode_hold_cycles;       // Minimum cycles to stay in a mode (from config)
+    int ready_history_window;
+    int fuzzy_trigger_count;
+    int focused_trigger_count;
+    int cycles_in_current_mode;
+    int min_mode_hold_cycles;
     
-    // PHASE 3: Ready-aware jump (smart token movement)
-    int park_counter;               // Counts cycles token has been parked (no ready hubs)
-    int max_park_cycles;            // T_max: Maximum cycles to park before normal advance (from config)
+    // Ready-aware jump (Phase 3)
+    int park_counter;
+    int max_park_cycles;
     
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
@@ -124,22 +119,22 @@ public:
     bool hasSilence() const { return activeTransmittersThisStep == 0; }
     int getActiveTransmitters() const { return activeTransmittersThisStep; }
     
-    // PHASE 1: Ready bitmap management methods
+    // Ready bitmap management
     void setHubReady(int hubId, bool isReady);
     bool isHubReady(int hubId) const;
     void resetReadyBitmap();
     int countReadyHubs() const;
-    void logReadyBitmap(int currentCycle) const; // PHASE 1: For testing
+    void logReadyBitmap(int currentCycle) const;
     
-    // PHASE 2: Ready-count trigger methods
+    // Ready-count trigger
     void updateReadyHistory();
     bool shouldSwitchToFuzzy() const;
     bool shouldSwitchToFocused() const;
     void checkAndSwitchModeProactive();
     
-    // PHASE 3: Ready-aware jump methods
-    int findNextReadyToken(int currentPos) const;
-    void advanceTokenSmart(); // Smart version using ready bitmap
+    // Ready-aware jump
+    int findNextReadyToken(int startPos) const;
+    void advanceTokenSmart();
 };
 
 // Global Fuzzy Token Controller (manages all channels)
@@ -161,15 +156,9 @@ public:
     
     void registerChannel(int channelId, const FuzzyTokenConfig& config, 
                         int numNodes, const vector<int>& nodeIds, const string& policy);
-    
     FuzzyTokenChannelState* getChannelState(int channelId);
-    
-    // Called by hub at end of each step to update state
     void endStep(int channelId, StepOutcome outcome, int stepCycles);
-    
     void reset();
-    
-    // Statistics
     void printStats(int channelId);
     void printAllStats();
     bool hasFuzzyTokenChannels() const { return !channelStates.empty(); }

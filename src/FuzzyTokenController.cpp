@@ -25,28 +25,24 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     config = cfg;
     numNodes = num_nodes;
     transmissionProb.resize(numNodes, 0.0);
-    
-    // PHASE 1: Initialize ready bitmap
     ready_bitmap.resize(numNodes, false);
     
-    // PHASE 2: Initialize ready-count trigger parameters from config
+    // Initialize ready-count trigger parameters
     ready_history_window = config.ready_history_window;
     fuzzy_trigger_count = config.fuzzy_trigger_count;
     focused_trigger_count = config.focused_trigger_count;
     min_mode_hold_cycles = config.min_mode_hold_cycles;
     cycles_in_current_mode = 0;
     
-    // PHASE 3: Initialize ready-aware jump parameters from config
+    // Initialize ready-aware jump parameters
     max_park_cycles = config.max_park_cycles;
     park_counter = 0;
     
     // Initialize token ring order
     tokenRingOrder = nodeIds;
     if (config.token_order == "pseudo_random") {
-        // Shuffle the order (using a deterministic seed for reproducibility)
         random_shuffle(tokenRingOrder.begin(), tokenRingOrder.end());
     }
-    // else: static order (already in nodeIds order)
     
     // Set initial token holder
     tokenID = config.initial_token_holder;
@@ -58,29 +54,19 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         }
     }
     
-    // Initialize fuzzy area (centered later around current token holder)
+    // Initialize fuzzy area
     FA_size = config.initial_FA;
     if (FA_size > numNodes) FA_size = numNodes;
     if (FA_size < 1) FA_size = 1;
     rebuildFuzzyArea();
-    
-    // Initialize transmission probabilities
     updateTransmissionProbabilities();
     
-    // Start in fuzzy mode
     periodMode = FUZZY_MODE;
-    currentStepCycles = 0; // Will be set based on actual step outcomes
+    currentStepCycles = 0;
     
     if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
         cout << "FuzzyTokenChannelState initialized: numNodes=" << numNodes 
-             << ", FA_size=" << FA_size 
-             << ", tokenID=" << tokenID 
-             << ", mode=" << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-             << ", W=" << ready_history_window
-             << ", K=" << fuzzy_trigger_count
-             << ", M=" << focused_trigger_count
-             << ", MIN_HOLD=" << min_mode_hold_cycles
-             << ", T_max=" << max_park_cycles << endl;
+             << ", FA_size=" << FA_size << ", tokenID=" << tokenID << endl;
     }
 }
 
@@ -89,54 +75,36 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
     
     switch (outcome) {
         case OUTCOME_COLLISION:
-            // Multiplicative decrease
-            FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
-            if (FA_size < 1) FA_size = 1;
-            totalCollisions++;
-            break;
-            
         case OUTCOME_CONGESTION:
-            // Subtractive decrease
             FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
-            // FA_size -= config.FA_increment;
             if (FA_size < 1) FA_size = 1;
-            totalCongestions++;
+            if (outcome == OUTCOME_COLLISION) totalCollisions++;
+            else totalCongestions++;
             break;
             
         case OUTCOME_SUCCESS:
-            // No change on success
             totalSuccesses++;
             break;
             
         case OUTCOME_SILENCE:
-            // Additive increase
             FA_size += config.FA_increment;
             if (FA_size > numNodes) FA_size = numNodes;
             totalSilences++;
             break;
     }
     
-    // Rebuild fuzzy area centered around token holder
     rebuildFuzzyArea();
-    
-    // Update transmission probabilities
     updateTransmissionProbabilities();
     
-    if (oldFA != FA_size) {
-        static int fa_change_count = 0;
-        fa_change_count++;
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldFA != FA_size) {
         const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
                                   (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
                                   (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
-        cerr << "[AIMD-FA-UPDATE #" << fa_change_count << "] FA_size: " << oldFA << " -> " << FA_size 
-             << " (outcome=" << outcome_str << ", collisions=" << totalCollisions 
-             << ", congestions=" << totalCongestions
-             << ", successes=" << totalSuccesses << ", silences=" << totalSilences << ")" << endl;
+        cerr << "[FA-UPDATE] " << oldFA << " -> " << FA_size << " (" << outcome_str << ")" << endl;
     }
 }
 
 void FuzzyTokenChannelState::updateTransmissionProbabilities() {
-    // Reset all probabilities
     for (int i = 0; i < numNodes; i++) {
         transmissionProb[i] = 0.0;
     }
@@ -144,19 +112,16 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
     if (FA_size == 0) return;
     
     if (config.pi_type == "equal") {
-        // Equal probability for all nodes in fuzzy area
         double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
             if (fuzzyArea.test(i)) transmissionProb[i] = p_uniform;
         }
     } else if (config.pi_type == "gaussian") {
-        // Gaussian distribution centered around token holder position on the ring
-        // sigma heuristic: FA_size/2
         const double sigma = std::max(1.0, FA_size / 2.0);
         int centerIdx = tokenRingPosition;
-        // Assign weights based on circular distance on ring order
         double sumw = 0.0;
         const int n = (int)tokenRingOrder.size();
+        
         for (int k = 0; k < FA_size && k < n; ++k) {
             int idx = (centerIdx + k - FA_size/2 + n) % n;
             int nodeId = tokenRingOrder[idx];
@@ -165,7 +130,7 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
             transmissionProb[nodeId] = w;
             sumw += w;
         }
-        // Normalize and apply min_transmission_prob if configured
+        
         const double minp = std::max(0.0, config.min_transmission_prob);
         double sumAfter = 0.0;
         if (sumw > 0.0) {
@@ -178,7 +143,7 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
                 }
             }
         }
-        // Renormalize to 1 over FA
+        
         if (sumAfter > 0.0) {
             const double invSumAfter = 1.0 / sumAfter;
             for (int i = 0; i < numNodes; i++) {
@@ -186,126 +151,71 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
             }
         }
     } else {
-        // Fallback to equal if unknown setting
         double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
-            if (transmissionProb[i] > 0) {
-                transmissionProb[i] = p_uniform;
-            }
+            if (transmissionProb[i] > 0) transmissionProb[i] = p_uniform;
         }
     }
 }
 
 void FuzzyTokenChannelState::advanceToken() {
-    // Move to next node in ring order
     tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
     tokenID = tokenRingOrder[tokenRingPosition];
-    // Recenter FA around new token holder
     rebuildFuzzyArea();
-    // Update probabilities with new center
     updateTransmissionProbabilities();
-
-    if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-        cout << "Token advanced to node " << tokenID << endl;
-    }
 }
 
-// PHASE 3: Ready-aware jump - Find next ready token holder
 int FuzzyTokenChannelState::findNextReadyToken(int currentPos) const {
-    // Search circularly for the next ready hub
     for (int offset = 1; offset <= numNodes; offset++) {
         int nextPos = (currentPos + offset) % tokenRingOrder.size();
         int nextHubId = tokenRingOrder[nextPos];
-        
-        if (isHubReady(nextHubId)) {
-            return nextPos;
-        }
+        if (isHubReady(nextHubId)) return nextPos;
     }
-    // No ready hub found
     return -1;
 }
 
-// PHASE 3: Smart token advancement with ready-aware jump
 void FuzzyTokenChannelState::advanceTokenSmart() {
-    int oldTokenID = tokenID;
     int oldPosition = tokenRingPosition;
-    
-    // Try to find next ready hub
     int nextReadyPos = findNextReadyToken(tokenRingPosition);
     
     if (nextReadyPos == -1) {
-        // Nobody ready → park token or advance normally after timeout
         park_counter++;
-        
-        static int park_event_count = 0;
-        if (park_counter <= 10 || park_event_count % 50 == 0) {
-            cerr << "[TOKEN-PARK] No ready hubs found, parking token (park_counter=" 
-                 << park_counter << ", T_max=" << max_park_cycles << ")" << endl;
-        }
-        park_event_count++;
-        
         if (park_counter > max_park_cycles) {
-            // Timeout: advance normally to prevent starvation
             tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
             tokenID = tokenRingOrder[tokenRingPosition];
-            park_counter = 0; // Reset counter after forced advance
-            
-            if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-                cerr << "[TOKEN-PARK-TIMEOUT] Forced advance after " << max_park_cycles 
-                     << " cycles: " << oldTokenID << " → " << tokenID << endl;
-            }
+            park_counter = 0;
         }
-        // Note: When parking (park_counter <= max_park_cycles), token stays in place
-        // We still need to rebuild FA/probs in case state changed
     } else {
-        // Found a ready hub → jump to it
         tokenRingPosition = nextReadyPos;
         tokenID = tokenRingOrder[tokenRingPosition];
-        park_counter = 0; // Reset parking counter
+        park_counter = 0;
         
-        // Log jumps (skip sequential moves for clarity)
-        if (nextReadyPos != (oldPosition + 1) % tokenRingOrder.size()) {
-            static int jump_count = 0;
-            jump_count++;
-            if (jump_count <= 50 || jump_count % 100 == 0) {
-                cerr << "[TOKEN-JUMP #" << jump_count << "] " 
-                     << oldTokenID << " → " << tokenID 
-                     << " (skipped " << (nextReadyPos > oldPosition ? 
-                                         nextReadyPos - oldPosition - 1 : 
-                                         tokenRingOrder.size() - oldPosition + nextReadyPos - 1)
-                     << " hubs)" << endl;
-            }
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH && 
+            nextReadyPos != (oldPosition + 1) % tokenRingOrder.size()) {
+            int skipped = (nextReadyPos > oldPosition) ? 
+                         nextReadyPos - oldPosition - 1 : 
+                         tokenRingOrder.size() - oldPosition + nextReadyPos - 1;
+            cerr << "[TOKEN-JUMP] " << tokenRingOrder[oldPosition] << " → " << tokenID 
+                 << " (skipped " << skipped << " hubs)" << endl;
         }
     }
     
-    // Recenter FA around new token holder
     rebuildFuzzyArea();
-    // Update probabilities with new center
     updateTransmissionProbabilities();
 }
 
 void FuzzyTokenChannelState::switchMode() {
-    // Check thresholds
-    double thr1_value = config.thr1;
-    double thr2_value = config.thr2;
-    
-    if (config.thr_is_percentage) {
-        thr1_value = config.thr1 * numNodes;
-        thr2_value = config.thr2 * numNodes;
-    }
-    
-    FuzzyTokenMode oldMode = periodMode;
+    double thr1_value = config.thr_is_percentage ? config.thr1 * numNodes : config.thr1;
+    double thr2_value = config.thr_is_percentage ? config.thr2 * numNodes : config.thr2;
     
     if (periodMode == FUZZY_MODE) {
-        // Switch to FOCUSED when FA_size DROPS BELOW thr1 (low contention narrowed FA)
         if (FA_size < thr1_value) {
             periodMode = FOCUSED_MODE;
             totalFocusedSteps++;
         } else {
             totalFuzzySteps++;
         }
-    } else { // FOCUSED_MODE
-        // Switch back to FUZZY when FA_size EXCEEDS thr2 (contention reduced, can expand FA)
+    } else {
         if (FA_size > thr2_value) {
             periodMode = FUZZY_MODE;
             totalFuzzySteps++;
@@ -314,14 +224,7 @@ void FuzzyTokenChannelState::switchMode() {
         }
     }
     
-    // Update FA_size histogram
     FA_size_histogram[FA_size]++;
-    
-    if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldMode != periodMode) {
-        cout << "Mode switched: " << (oldMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-             << " -> " << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-             << " (FA=" << FA_size << ")" << endl;
-    }
 }
 
 double FuzzyTokenChannelState::getTransmissionProbability(int nodeId) const {
@@ -331,15 +234,7 @@ double FuzzyTokenChannelState::getTransmissionProbability(int nodeId) const {
 
 bool FuzzyTokenChannelState::isInFuzzyArea(int nodeId) const {
     if (nodeId < 0 || nodeId >= MAX_FUZZY_TOKEN_NODES) return false;
-    bool result = fuzzyArea.test(nodeId);
-    
-    static int check_count = 0;
-    if (++check_count % 1000 == 0 && GlobalParams::verbose_mode >= VERBOSE_LOW) {
-        cerr << "[FUZZY-AREA-CHECK] nodeId=" << nodeId << " in FA? " << result 
-             << " (FA_size=" << FA_size << ", tokenID=" << tokenID << ")" << endl;
-    }
-    
-    return result;
+    return fuzzyArea.test(nodeId);
 }
 
 // FuzzyTokenController implementation
@@ -353,13 +248,8 @@ void FuzzyTokenController::registerChannel(int channelId, const FuzzyTokenConfig
     
     FuzzyTokenChannelState* state = new FuzzyTokenChannelState();
     state->initialize(config, numNodes, nodeIds);
-    state->macPolicy = policy; // Store MAC policy
+    state->macPolicy = policy;
     channelStates[channelId] = state;
-    
-    if (GlobalParams::verbose_mode >= VERBOSE_LOW) {
-        cout << "FuzzyTokenController: Registered channel " << channelId 
-             << " with " << numNodes << " nodes, policy=" << policy << endl;
-    }
 }
 
 FuzzyTokenChannelState* FuzzyTokenController::getChannelState(int channelId) {
@@ -374,20 +264,14 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     if (!state) return;
     
     // Log step end with transmission info
-    static int step_count = 0;
-    step_count++;
-    const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
-                              (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
-                              (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
-    cerr << "[STEP-END #" << step_count << "] Channel " << channelId 
-        << " outcome=" << outcome_str
-        << ", active_transmitters=" << state->activeTransmittersThisStep
-        << ", FA_size=" << state->FA_size
-        << ", collisions=" << state->totalCollisions
-        << ", congestions=" << state->totalCongestions
-        << ", successes=" << state->totalSuccesses
-        << ", silences=" << state->totalSilences
-        << endl;
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+        static int step_count = 0;
+        step_count++;
+        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
+                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+        cerr << "[STEP-END] Channel " << channelId << " outcome=" << outcome_str << endl;
+    }
     
     // Update fuzzy area based on outcome (ONLY in FUZZY mode where FA is actually used)
     // In FOCUSED mode, only token holder transmits, so FA_size adjustments are unnecessary
@@ -395,30 +279,22 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         state->updateFuzzyArea(outcome);
     }
     
-    // PHASE 3: Advance token (use smart jump for FUZZY_TOKEN_JUMP_PLUS in FOCUSED mode)
     bool useJumpFeatures = (state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
     bool usePlusFeatures = (state->macPolicy == FUZZY_TOKEN_PLUS || state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
     if (useJumpFeatures && inFocusedMode) {
-        state->advanceTokenSmart(); // Use ready-aware jumping
+        state->advanceTokenSmart();
     } else {
-        state->advanceToken(); // Standard sequential advancement
+        state->advanceToken();
     }
     
-    // Check for mode switch
-    // PLUS protocols use proactive mode switching (ready-count trigger), so skip reactive switching
     if (!usePlusFeatures) {
-        state->switchMode(); // Only use reactive FA-based switching for baseline FUZZY_TOKEN
+        state->switchMode();
     }
     
-    // Reset transmission counters for next step
     state->resetStepState();
-    
-    // PHASE 1: Reset ready bitmap for next cycle
     state->resetReadyBitmap();
-    
-    // Update step cycle count
     state->currentStepCycles = stepCycles;
 }
 
@@ -452,20 +328,15 @@ void FuzzyTokenController::printStats(int channelId) {
     cout << "3. Number of steps for which focused mode is used: " << state->totalFocusedSteps << endl;
     cout << "4. Number of steps for which fuzzy mode is used: " << state->totalFuzzySteps << endl;
     
-    // Print FA_size histogram
     cout << "5. Histogram of FA_size:" << endl;
     if (state->FA_size_histogram.empty()) {
         cout << "   (No FA_size data recorded)" << endl;
     } else {
-        // Find the max FA_size and max count for formatting
         int maxFA = 0;
-        int maxCount = 0;
         for (const auto& entry : state->FA_size_histogram) {
             if (entry.first > maxFA) maxFA = entry.first;
-            if (entry.second > maxCount) maxCount = entry.second;
         }
         
-        // Print histogram
         cout << "   FA_size | Count" << endl;
         cout << "   --------+------" << endl;
         for (int fa = 1; fa <= maxFA; fa++) {
@@ -488,11 +359,6 @@ void FuzzyTokenController::printStats(int channelId) {
 void FuzzyTokenChannelState::registerTransmission(int hubId) {
     transmittingHubsThisStep.insert(hubId);
     activeTransmittersThisStep = transmittingHubsThisStep.size();
-    
-    static int register_count = 0;
-    register_count++;
-    cerr << "[PREAMBLE-REGISTERED #" << register_count << "] Hub " << hubId 
-         << " registered transmission (total active: " << activeTransmittersThisStep << ")" << endl;
 }
 
 void FuzzyTokenChannelState::resetStepState() {
@@ -500,7 +366,7 @@ void FuzzyTokenChannelState::resetStepState() {
     activeTransmittersThisStep = 0;
 }
 
-// PHASE 1: Ready bitmap management implementations
+// Ready bitmap management implementations
 void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
     if (hubId >= 0 && hubId < numNodes) {
         ready_bitmap[hubId] = isReady;
@@ -515,22 +381,6 @@ bool FuzzyTokenChannelState::isHubReady(int hubId) const {
 }
 
 void FuzzyTokenChannelState::resetReadyBitmap() {
-    // PHASE 1: Log ready hubs before reset (for debugging)
-    static int reset_count = 0;
-    reset_count++;
-    if (reset_count % 100 == 0 || GlobalParams::verbose_mode == VERBOSE_HIGH) {
-        int ready_count = countReadyHubs();
-        if (ready_count > 0) {
-            cerr << "[READY-BITMAP-RESET #" << reset_count << "] Ready hubs count: " << ready_count << " (";
-            for (int i = 0; i < numNodes; i++) {
-                if (ready_bitmap[i]) {
-                    cerr << "Hub" << i << " ";
-                }
-            }
-            cerr << ")" << endl;
-        }
-    }
-    
     std::fill(ready_bitmap.begin(), ready_bitmap.end(), false);
 }
 
@@ -542,57 +392,31 @@ int FuzzyTokenChannelState::countReadyHubs() const {
     return count;
 }
 
-// PHASE 1: Log ready bitmap for testing
 void FuzzyTokenChannelState::logReadyBitmap(int currentCycle) const {
+    if (GlobalParams::verbose_mode < VERBOSE_HIGH) return;
+    
     cerr << "[READY-BITMAP] Cycle " << currentCycle << ": ";
     for (int i = 0; i < numNodes; i++) {
         cerr << (ready_bitmap[i] ? "1" : "0");
     }
-    cerr << " (Ready hubs: ";
-    bool first = true;
-    for (int i = 0; i < numNodes; i++) {
-        if (ready_bitmap[i]) {
-            if (!first) cerr << ",";
-            cerr << "Hub" << i;
-            first = false;
-        }
-    }
-    if (first) cerr << "NONE";
-    cerr << ")" << endl;
+    cerr << endl;
 }
 
-// PHASE 2: Ready-count trigger implementations
+// Ready-count trigger implementations
 void FuzzyTokenChannelState::updateReadyHistory() {
     int ready_count = countReadyHubs();
     ready_history.push_back(ready_count);
     
-    // Maintain sliding window of size W
     if (ready_history.size() > (size_t)ready_history_window) {
         ready_history.pop_front();
-    }
-    
-    static int history_update_count = 0;
-    history_update_count++;
-    if (history_update_count <= 50 || history_update_count % 100 == 0) {
-        cerr << "[READY-HISTORY-UPDATE #" << history_update_count << "] ready_count=" << ready_count 
-             << ", history_size=" << ready_history.size() << ", history=[";
-        for (size_t i = 0; i < ready_history.size(); i++) {
-            if (i > 0) cerr << ",";
-            cerr << ready_history[i];
-        }
-        cerr << "]" << endl;
     }
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
-    // Need at least K consecutive windows in history
     if (ready_history.size() < (size_t)fuzzy_trigger_count) {
         return false;
     }
     
-    // CORRECTED LOGIC: Switch to FUZZY when traffic is LOW/SPARSE
-    // Low traffic → Can use FUZZY mode's probabilistic transmission
-    // Check last K windows: all must have ≤1 ready hub (light traffic)
     for (size_t i = ready_history.size() - fuzzy_trigger_count; i < ready_history.size(); i++) {
         if (ready_history[i] > 1) {
             return false;
@@ -603,14 +427,10 @@ bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
-    // Need at least M consecutive windows in history
     if (ready_history.size() < (size_t)focused_trigger_count) {
         return false;
     }
     
-    // CORRECTED LOGIC: Switch to FOCUSED when traffic is HIGH
-    // High traffic → Use FOCUSED mode's deterministic token ring (prevents collisions)
-    // Check last M windows: all must have >1 ready hub (high traffic)
     for (size_t i = ready_history.size() - focused_trigger_count; i < ready_history.size(); i++) {
         if (ready_history[i] <= 1) {
             return false;
@@ -622,69 +442,39 @@ bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
 
 void FuzzyTokenChannelState::checkAndSwitchModeProactive() {
     FuzzyTokenMode oldMode = periodMode;
-    int cyclesHeld = cycles_in_current_mode;  // Save BEFORE resetting
     
-    // Increment cycles in current mode
     cycles_in_current_mode++;
     
-    // DEBUG: Log trigger evaluation
-    static int eval_count = 0;
-    eval_count++;
-    bool shouldFuzzy = shouldSwitchToFuzzy();
-    bool shouldFocused = shouldSwitchToFocused();
-    if (eval_count <= 100 && (shouldFuzzy || shouldFocused)) {
-        cerr << "[TRIGGER-EVAL #" << eval_count << "] Mode=" << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-             << ", cycles_held=" << cycles_in_current_mode 
-             << ", shouldFuzzy=" << shouldFuzzy 
-             << ", shouldFocused=" << shouldFocused << endl;
-    }
-    
-    // HYSTERESIS: Prevent rapid switching by requiring minimum hold time
     if (cycles_in_current_mode < min_mode_hold_cycles) {
-        return;  // Stay in current mode until minimum hold time is met
+        return;
     }
     
     if (shouldSwitchToFuzzy() && periodMode != FUZZY_MODE) {
         periodMode = FUZZY_MODE;
-        cycles_in_current_mode = 0;  // Reset counter
-        cerr << "[PROACTIVE-MODE-SWITCH] FOCUSED -> FUZZY (light traffic detected, using probabilistic transmission)" << endl;
+        cycles_in_current_mode = 0;
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+            cerr << "[MODE-SWITCH] FOCUSED -> FUZZY" << endl;
+        }
     } else if (shouldSwitchToFocused() && periodMode != FOCUSED_MODE) {
         periodMode = FOCUSED_MODE;
-        cycles_in_current_mode = 0;  // Reset counter
-        cerr << "[PROACTIVE-MODE-SWITCH] FUZZY -> FOCUSED (high traffic detected, using deterministic token ring)" << endl;
-    }
-    
-    if (oldMode != periodMode) {
-        static int mode_switch_count = 0;
-        mode_switch_count++;
-        cerr << "[PROACTIVE-MODE-SWITCH #" << mode_switch_count << "] Mode changed: "
-             << (oldMode == FUZZY_MODE ? "FUZZY" : "FOCUSED") << " -> "
-             << (periodMode == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-             << " (held for " << cyclesHeld << " cycles, history=[";
-        for (size_t i = 0; i < ready_history.size(); i++) {
-            if (i > 0) cerr << ",";
-            cerr << ready_history[i];
+        cycles_in_current_mode = 0;
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+            cerr << "[MODE-SWITCH] FUZZY -> FOCUSED" << endl;
         }
-        cerr << "])" << endl;
     }
 }
 
 void FuzzyTokenController::printAllStats() {
-    if (channelStates.empty()) {
-        return; // No fuzzy token channels configured
-    }
+    if (channelStates.empty()) return;
     
-    cout << "\n" << endl;
-    cout << "========================================================" << endl;
+    cout << "\n========================================================" << endl;
     cout << "         FUZZY TOKEN PROTOCOL STATISTICS" << endl;
     cout << "========================================================" << endl;
     
     for (const auto& entry : channelStates) {
-        int channelId = entry.first;
-        printStats(channelId);
+        printStats(entry.first);
     }
     
-    // Add wireless buffer statistics
     cout << "\n=== Wireless Buffer Statistics ===" << endl;
     int total_attempts = Target::getTotalWirelessRxAttempts();
     int total_success = Target::getTotalWirelessRxSuccess();

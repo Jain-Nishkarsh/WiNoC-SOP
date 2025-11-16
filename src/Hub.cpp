@@ -868,30 +868,16 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			cout << "Warning: Fuzzy Token state not initialized for channel " << channel << endl;
 		return;
 	}
-	
-	// PHASE 1: Update ready bitmap - mark if this hub has packets to send
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
 	
-	// Check which PLUS features to enable based on MAC policy
 	string macPolicy = token_ring->getPolicy(channel).first;
-	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS);  // Phase 2: Ready-count trigger
-	bool useJumpFeatures = (macPolicy == FUZZY_TOKEN_JUMP_PLUS);  // Phase 3: Ready-aware jump
+	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS);
+	bool useJumpFeatures = (macPolicy == FUZZY_TOKEN_JUMP_PLUS);
 	
 	if (usePlusFeatures) {
 		state->setHubReady(local_id, hasPacketToSend);
-		
-		// PHASE 1: Log ready bitmap updates for testing
-		static int bitmap_update_count = 0;
-		bitmap_update_count++;
-		if (bitmap_update_count <= 200) { // Log first 200 updates
-			cerr << "[READY-BITMAP-UPDATE #" << bitmap_update_count << "] Hub " << local_id 
-			     << " ready=" << (hasPacketToSend ? "YES" : "NO") 
-			     << " (buffer_tx.IsEmpty=" << init[channel]->buffer_tx.IsEmpty() << ")" << endl;
-		}
 	}
 	
-	// PHASE 2: Token holder updates ready history and performs proactive mode switching
-	// This happens once per cycle after all hubs have updated their ready bits
 	if (usePlusFeatures && node->isTokenHolder()) {
 		static int last_history_update_cycle = -1;
 		int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
@@ -924,11 +910,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// In focused mode there are no preambles; the token holder should immediately transmit if it has data.
 	// Only if the token holder has no data should we end the step as SILENCE and advance the token.
 	if (state->getMode() == FOCUSED_MODE) {
-		// PHASE 1: Log ready bitmap for first 20 FOCUSED steps (testing)
-		static int focused_step_log_count = 0;
-		if (node->isTokenHolder() && focused_step_log_count < 20) {
+		if (node->isTokenHolder() && GlobalParams::verbose_mode == VERBOSE_HIGH) {
 			state->logReadyBitmap(current_cycle);
-			focused_step_log_count++;
 		}
 		
 		if (node->isTokenHolder()) {
@@ -982,50 +965,36 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// - Prevents multiple initiators from proceeding when the token holder is idle
 	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
 	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
-		// PHASE 1: Log ready bitmap for first 20 steps (testing)
-		static int step_log_count = 0;
-		if (step_log_count < 20) {
+		if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
 			state->logReadyBitmap(current_cycle);
-			step_log_count++;
 		}
 		
-		// Token holder checks for activity after preamble phase
 		int active_count = state->getActiveTransmitters();
 		
 		if (active_count == 0) {
-			// SILENCE: No preambles sent, end step after configured silence_cycles
-			static int silence_count = 0;
-			silence_count++;
-			if (silence_count <= 10 || silence_count % 1000 == 0) {
-				cerr << "[FUZZY-SILENCE #" << silence_count << "] Token holder (Hub " << local_id
-				     << ") detected silence after " << step_duration << " cycles, ending step" << endl;
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+				cerr << "[FUZZY-SILENCE] Hub " << local_id << " ending step" << endl;
 			}
-			// Report how long this silence step took (just preamble_cycles)
 			int step_cycles = state->config.preamble_cycles;
 			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
-			// Start new step immediately
 			fuzzyTokenStepStartCycle[channel] = current_cycle;
 			fuzzyTokenActiveTransmitters[channel] = 0;
-			// Reset all nodes
 			for (auto& pair : fuzzyTokenNodes) {
 				if (pair.first == channel) {
 					pair.second->resetStepState();
 				}
 			}
 		} else if (active_count > 1) {
-			// COLLISION: Multiple preambles detected - ALL hubs must hold
-			// Only process collision ONCE per step
 			static int last_collision_cycle = -1;
 			if (current_cycle != last_collision_cycle) {
 				last_collision_cycle = current_cycle;
 				
-				cerr << "[COLLISION-DETECTED] Hub " << local_id << " (token holder) detected "
-					 << active_count << " simultaneous transmitters at cycle " << current_cycle
-					 << " (step started at " << fuzzyTokenStepStartCycle[channel] << ")" << endl;
+				if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+					cerr << "[COLLISION] Hub " << local_id << " detected " << active_count 
+					     << " transmitters" << endl;
+				}
 
-				// COLLISION: Reduce FA_size, advance token, NO transmission this step
-				// Report how long this collision step took (just preamble_cycles for detection)
 				int step_cycles = state->config.preamble_cycles;
 				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
 				
@@ -1037,53 +1006,18 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 						pair.second->resetStepState();
 					}
 				}
-				
-				cerr << "[COLLISION-STEP-END] Channel " << channel 
-				     << " collision detected, FA_size reduced, all hubs hold, new step starting" << endl;
 			}
-			return; // End this step immediately, no transmission
+			return;
 		}
 		// NOTE: Success outcome is handled when TAIL completes; if exactly one preamble was seen,
 		// that node will be allowed to transmit after preamble+1 cycles (no NACK broadcast).
 	}
 	
 	bool hasData = !init[channel]->buffer_tx.IsEmpty();
-	
-	static int has_data_count = 0;
-	if (hasData) {
-		has_data_count++;
-		if (has_data_count % 100 == 0) {
-			Flit flit = init[channel]->buffer_tx.Front();
-			cerr << "[FUZZY-HAS-DATA #" << has_data_count << "] Hub " << local_id 
-			     << " has data: src=" << flit.src_id << ", dst=" << flit.dst_id 
-			     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no 
-			     << ", tx_in_progress=" << transmission_in_progress.at(channel) << endl;
-		}
-	}
-	
-	// Determine if this node should attempt transmission
 	bool shouldTransmit = node->shouldAttemptTransmission(hasData);
 	
-	static int no_transmit_count = 0;
-	static int yes_transmit_count = 0;
-	
-	if (hasData && !shouldTransmit) {
-		no_transmit_count++;
-		if (no_transmit_count % 50 == 0) {
-			cerr << "[FUZZY-SKIP #" << no_transmit_count << "] Hub " << local_id 
-			     << " has data but shouldTransmit=false (token holder=" << node->isTokenHolder() 
-			     << ", in FA=" << node->isInFuzzyArea()
-			     << ", mode=" << (state->getMode() == FUZZY_MODE ? "FUZZY" : "FOCUSED") 
-			     << ", tx_in_progress=" << transmission_in_progress.at(channel) << ")" << endl;
-		}
-	}
-	
-	if (hasData && shouldTransmit) {
-		yes_transmit_count++;
-		cerr << "[FUZZY-SHOULD-TX #" << yes_transmit_count << "] Hub " << local_id 
-		     << " should transmit (mode=" << (state->getMode() == FUZZY_MODE ? "FUZZY" : "FOCUSED")
-		     << ", token holder=" << node->isTokenHolder()
-		     << ", tx_in_progress=" << transmission_in_progress.at(channel) << ")" << endl;
+	if (!shouldTransmit) {
+		return;
 	}
 	
 	if (shouldTransmit)
@@ -1212,18 +1146,17 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 
 void Hub::completeFuzzyTokenTransmission(int channel)
 {
-	cerr << "[DEBUG] completeFuzzyTokenTransmission called for channel " << channel << endl;
+	if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+		cerr << "[COMPLETE-TX] Channel " << channel << endl;
+	}
 	
-	// Check if this hub uses FUZZY_TOKEN MAC
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
-		cerr << "[DEBUG] No fuzzyTokenNode for channel " << channel << ", returning" << endl;
-		return; // Not using Fuzzy Token on this channel
+		return;
 	}
 	
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
 	FuzzyTokenChannelState* state = controller.getChannelState(channel);
 	if (!state) {
-		cerr << "[DEBUG] No channel state for channel " << channel << endl;
 		return;
 	}
 	
