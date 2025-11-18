@@ -109,7 +109,9 @@ void Initiator::thread_process()
 			if (flit_payload.flit_type == FLIT_TYPE_TAIL)
 			{
 				LOG << "*** [Ch"<< _channel_id <<"] tail flit sent " << flit_payload << ", releasing token" << endl;
-				cerr << "[INIT-DEBUG] TAIL flit sent on channel " << _channel_id << endl;
+				if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+					cerr << "[TAIL] Channel " << _channel_id << endl;
+				}
 				hub->flag[_channel_id]->write(RELEASE_CHANNEL);
 				hub->transmission_in_progress.at(_channel_id) = false;
 				

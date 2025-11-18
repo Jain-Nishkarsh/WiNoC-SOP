@@ -1,6 +1,7 @@
-# FUZZY TOKEN PLUS - 8x8 Mesh with Ready-Count Trigger
-# Enhanced version with proactive mode switching based on traffic prediction
-# Uses ready bitmap and history tracking to switch modes before collisions occur
+# FUZZY TOKEN JUMP PLUS - 8x8 Mesh with ALL enhancements
+# Phase 1: Ready bitmap piggybacking
+# Phase 2: Ready-count trigger (proactive mode switching)
+# Phase 3: Ready-aware jump (smart token movement)
 
 topology: MESH
 mesh_dim_x: 8
@@ -14,6 +15,7 @@ n_virtual_channels: 1
 routing_algorithm: XY
 routing_table_filename: ""
 dyad_threshold: 0.6
+# da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
@@ -47,12 +49,9 @@ RadioChannels:
     defaults:
         data_rate: 16
         ber: [0, 0]
-        mac_policy: [FUZZY_TOKEN_PLUS]
+        mac_policy: [FUZZY_TOKEN_JUMP_PLUS]
         fuzzy_token:
             preamble_cycles: 0
-            thr1: 0.2
-            thr2: 0.5
-            thr_is_percentage: true
 
             initial_FA: 8
             FA_increment: 1
@@ -64,13 +63,15 @@ RadioChannels:
             initial_token_holder: 0
             token_order: static
             
-            # Ready-count trigger parameters (Phase 2 ONLY for FUZZY_TOKEN_PLUS)
-            ready_history_window: 6           # W: sliding window size for ready count history
+            # Ready-count trigger parameters (Phase 2)
+            ready_history_window: 4           # W: sliding window size for ready count history
             fuzzy_ready_threshold: 3          # K: max ready hubs for FUZZY (≤3 ready)
-            focused_ready_threshold: 8        # M: min ready hubs for FOCUSED (>8 ready)
-            fuzzy_consecutive_windows: 4      # Consecutive windows ≤K to trigger FUZZY
-            focused_consecutive_windows: 4    # Consecutive windows >M to trigger FOCUSED
-            # Note: Phase 3 (ready-aware jump) is NOT enabled for FUZZY_TOKEN_PLUS
+            focused_ready_threshold: 10        # M: min ready hubs for FOCUSED (>8 ready)
+            fuzzy_consecutive_windows: 2      # Consecutive windows ≤K to trigger FUZZY
+            focused_consecutive_windows: 2    # Consecutive windows >M to trigger FOCUSED
+            
+            # Ready-aware jump parameters (Phase 3)
+            jump_cooldown: 10             # Minimum token cycles between jumps (0 = no cooldown)
 
 clock_period_ps: 1000
 reset_time: 100
@@ -79,7 +80,7 @@ stats_warm_up_time: 0
 
 min_packet_size: 2
 max_packet_size: 4
-packet_injection_rate: 0.005
+packet_injection_rate: 0.01
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_TRANSPOSE1
 traffic_table_filename: ""

@@ -74,9 +74,13 @@ namespace YAML {
             
             // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
             config.ready_history_window = node["ready_history_window"].as<int>(6);
-            config.fuzzy_trigger_count = node["fuzzy_trigger_count"].as<int>(4);
-            config.focused_trigger_count = node["focused_trigger_count"].as<int>(4);
-            config.min_mode_hold_cycles = node["min_mode_hold_cycles"].as<int>(10);
+            config.fuzzy_ready_threshold = node["fuzzy_ready_threshold"].as<int>(3);
+            config.focused_ready_threshold = node["focused_ready_threshold"].as<int>(8);
+            config.fuzzy_consecutive_windows = node["fuzzy_consecutive_windows"].as<int>(4);
+            config.focused_consecutive_windows = node["focused_consecutive_windows"].as<int>(4);
+            
+            // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
+            config.jump_cooldown = node["jump_cooldown"].as<int>(0);
             
             return true;
         }
