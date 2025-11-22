@@ -62,6 +62,9 @@ public:
     int totalFocusedSteps;
     map<int, int> FA_size_histogram;
     
+    // Cache for Gaussian weights
+    map<int, vector<double>> gaussian_weights_cache;
+
     // Transmission tracking
     int activeTransmittersThisStep;
     set<int> transmittingHubsThisStep;

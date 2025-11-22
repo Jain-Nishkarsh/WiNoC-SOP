@@ -90,8 +90,14 @@ using namespace std;
 #define TOKEN_MAX_HOLD         "TOKEN_MAX_HOLD"
 #define TOKEN_PACKET           "TOKEN_PACKET"
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
-#define FUZZY_TOKEN_PLUS       "FUZZY_TOKEN_PLUS"
-#define FUZZY_TOKEN_JUMP_PLUS  "FUZZY_TOKEN_JUMP_PLUS"
+#define FUZZY_RCT              "FUZZY_RCT"
+#define FUZZY_RAJ              "FUZZY_RAJ"
+
+enum ProbabilityDistribution {
+    PI_EQUAL,
+    PI_GAUSSIAN,
+    PI_OTHER
+};
 
 // Fuzzy Token configuration
 typedef struct {
@@ -101,20 +107,21 @@ typedef struct {
     int initial_FA;             // Initial fuzzy area size
     int FA_increment;           // Additive increase on silence (default: 1)
     double FA_decrement_factor; // Multiplicative decrease on collision (default: 0.5)
-    string pi_type;             // Probability distribution type: "equal" or "gaussian"
+    string pi_type_str;         // Probability distribution type: "equal" or "gaussian" (string for config)
+    ProbabilityDistribution pi_type; // Enum for runtime efficiency
     double min_transmission_prob; // Minimum transmission probability for nodes with data
     int initial_token_holder;   // Initial token holder node ID
     string token_order;         // Token order: "static" or "pseudo_random"
     bool thr_is_percentage;     // True if thr1/thr2 are percentages of N
     
-    // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
+    // Ready-count trigger parameters (FUZZY_RCT)
     int ready_history_window;        // W: Number of cycles to track ready counts (default: 6)
     int fuzzy_ready_threshold;       // K: Max ready hubs for FUZZY mode (≤K ready) (default: 3)
     int focused_ready_threshold;     // M: Min ready hubs for FOCUSED mode (>M ready) (default: 8)
     int fuzzy_consecutive_windows;   // Consecutive windows ≤K to trigger FUZZY (default: 4)
     int focused_consecutive_windows; // Consecutive windows >M to trigger FOCUSED (default: 4)
     
-    // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
+    // Ready-aware jump parameters (FUZZY_RAJ)
     int jump_cooldown;          // Minimum token cycles between jumps (default: 0 = no cooldown)
 } FuzzyTokenConfig;
 

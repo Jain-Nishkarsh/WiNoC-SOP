@@ -42,6 +42,8 @@ class Buffer {
     Flit Pop();		// Pop a flit
 
     Flit Front() const;	// Return a copy of the first flit in the buffer
+    
+    Flit& FrontMutable(); // Return a reference to the first flit in the buffer
 
     unsigned int Size() const;
 

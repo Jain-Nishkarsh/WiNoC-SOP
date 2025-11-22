@@ -501,7 +501,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -871,8 +871,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
 	
 	string macPolicy = token_ring->getPolicy(channel).first;
-	bool usePlusFeatures = (macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS);
-	bool useJumpFeatures = (macPolicy == FUZZY_TOKEN_JUMP_PLUS);
+	bool usePlusFeatures = (macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ);
+	bool useJumpFeatures = (macPolicy == FUZZY_RAJ);
 	
 	if (usePlusFeatures) {
 		state->setHubReady(local_id, hasPacketToSend);

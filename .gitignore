@@ -2,6 +2,7 @@
 /bin/build/
 noxim
 .DS_Store
-results/
 .vscode
-!evaluate.ipynb
+results/*
+!results/
+!results/evaluate.ipynb
