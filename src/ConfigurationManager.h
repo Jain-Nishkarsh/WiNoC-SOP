@@ -66,20 +66,29 @@ namespace YAML {
             config.initial_FA = node["initial_FA"].as<int>(10);
             config.FA_increment = node["FA_increment"].as<int>(1);
             config.FA_decrement_factor = node["FA_decrement_factor"].as<double>(0.5);
-            config.pi_type = node["pi_type"].as<string>("equal");
+            config.pi_type_str = node["pi_type"].as<string>("equal");
+            
+            if (config.pi_type_str == "gaussian") {
+                config.pi_type = PI_GAUSSIAN;
+            } else if (config.pi_type_str == "equal") {
+                config.pi_type = PI_EQUAL;
+            } else {
+                config.pi_type = PI_OTHER;
+            }
+
             config.min_transmission_prob = node["min_transmission_prob"].as<double>(0.05);
             config.initial_token_holder = node["initial_token_holder"].as<int>(0);
             config.token_order = node["token_order"].as<string>("static");
             config.thr_is_percentage = node["thr_is_percentage"].as<bool>(true);
             
-            // Ready-count trigger parameters (FUZZY_TOKEN_PLUS)
+            // Ready-count trigger parameters (FUZZY_RCT)
             config.ready_history_window = node["ready_history_window"].as<int>(6);
             config.fuzzy_ready_threshold = node["fuzzy_ready_threshold"].as<int>(3);
             config.focused_ready_threshold = node["focused_ready_threshold"].as<int>(8);
             config.fuzzy_consecutive_windows = node["fuzzy_consecutive_windows"].as<int>(4);
             config.focused_consecutive_windows = node["focused_consecutive_windows"].as<int>(4);
             
-            // Ready-aware jump parameters (FUZZY_TOKEN_PLUS Phase 3)
+            // Ready-aware jump parameters (FUZZY_RAJ Phase 3)
             config.jump_cooldown = node["jump_cooldown"].as<int>(0);
             
             return true;

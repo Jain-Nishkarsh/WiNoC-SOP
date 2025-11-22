@@ -139,9 +139,7 @@ void Router::txProcess()
 		      // manage special case of target hub not directly connected to destination
 		      if (o>=DIRECTION_HUB_RELAY)
 			  {
-		      	Flit f = buffer[i][vc].Pop();
-		      	f.hub_relay_node = o-DIRECTION_HUB_RELAY;
-		      	buffer[i][vc].Push(f);
+		      	buffer[i][vc].FrontMutable().hub_relay_node = o-DIRECTION_HUB_RELAY;
 		      	o = DIRECTION_HUB;
 			  }
 

@@ -111,13 +111,27 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
     
     if (FA_size == 0) return;
     
-    if (config.pi_type == "equal") {
+    if (config.pi_type == PI_EQUAL) {
         double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
             if (fuzzyArea.test(i)) transmissionProb[i] = p_uniform;
         }
-    } else if (config.pi_type == "gaussian") {
-        const double sigma = std::max(1.0, FA_size / 2.0);
+    } else if (config.pi_type == PI_GAUSSIAN) {
+        // Check cache first
+        if (gaussian_weights_cache.find(FA_size) == gaussian_weights_cache.end()) {
+            // Compute and cache weights for this FA_size
+            vector<double> weights;
+            weights.resize(FA_size);
+            const double sigma = std::max(1.0, FA_size / 2.0);
+            
+            for (int k = 0; k < FA_size; ++k) {
+                const int dist = std::abs(k - FA_size/2);
+                weights[k] = std::exp(-(dist*dist) / (2.0 * sigma * sigma));
+            }
+            gaussian_weights_cache[FA_size] = weights;
+        }
+
+        const vector<double>& weights = gaussian_weights_cache[FA_size];
         int centerIdx = tokenRingPosition;
         double sumw = 0.0;
         const int n = (int)tokenRingOrder.size();
@@ -125,8 +139,7 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
         for (int k = 0; k < FA_size && k < n; ++k) {
             int idx = (centerIdx + k - FA_size/2 + n) % n;
             int nodeId = tokenRingOrder[idx];
-            const int dist = std::abs(k - FA_size/2);
-            const double w = std::exp(-(dist*dist) / (2.0 * sigma * sigma));
+            double w = weights[k];
             transmissionProb[nodeId] = w;
             sumw += w;
         }
@@ -287,8 +300,8 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     // FA_size is used in FUZZY mode for fuzzy area, and checked by switchMode() for reactive switching
     state->updateFuzzyArea(outcome);
     
-    bool useJumpFeatures = (state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
-    bool usePlusFeatures = (state->macPolicy == FUZZY_TOKEN_PLUS || state->macPolicy == FUZZY_TOKEN_JUMP_PLUS);
+    bool useJumpFeatures = (state->macPolicy == FUZZY_RAJ);
+    bool usePlusFeatures = (state->macPolicy == FUZZY_RCT || state->macPolicy == FUZZY_RAJ);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
     if (useJumpFeatures && inFocusedMode) {

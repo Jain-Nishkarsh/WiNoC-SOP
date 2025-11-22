@@ -14,16 +14,6 @@
 #include <cstdlib>
 
 bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
-    static int call_count = 0;
-    call_count++;
-    
-    if (call_count <= 20 || call_count % 1000 == 0) {
-        cerr << "[SHOULD-TX-CHECK #" << call_count << "] Node " << nodeId 
-             << " hasData=" << hasData 
-             << " decisionMade=" << transmissionDecisionMade 
-             << " cachedDecision=" << shouldTransmitThisStep << endl;
-    }
-    
     // If we already made a decision this step, return the cached result
     if (transmissionDecisionMade) {
         return shouldTransmitThisStep;
@@ -53,7 +43,7 @@ bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
                     
                     // Apply optional probability floor only for equal PI to prevent stalls.
                     // For gaussian PI we rely on the distribution already applying min floor during normalization.
-                    if (state->config.pi_type == string("equal")) {
+                    if (state->config.pi_type == PI_EQUAL) {
                         double min_p = state->config.min_transmission_prob;
                         if (hasData && p < min_p) {
                             p = min_p;
@@ -70,11 +60,6 @@ bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
     // Cache the decision
     shouldTransmitThisStep = decision;
     transmissionDecisionMade = true;
-    
-    if (call_count <= 20 || call_count % 1000 == 0) {
-        cerr << "[SHOULD-TX-DECISION] Node " << nodeId 
-             << " decided: " << decision << endl;
-    }
     
     return decision;
 }

@@ -93,7 +93,7 @@ void TokenRing::updateTokens()
                 updateTokenHold(channel);
             else if (macPolicy == TOKEN_MAX_HOLD)
                 updateTokenMaxHold(channel);
-            else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_TOKEN_PLUS || macPolicy == FUZZY_TOKEN_JUMP_PLUS) {
+            else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ) {
                 // For Fuzzy Token variants, token management is handled by FuzzyTokenController
                 // No traditional token ring update needed here
             }
@@ -133,7 +133,7 @@ void TokenRing::attachHub(int channel, int hub, sc_in<int>* hub_token_holder_por
 
         string macPolicy = token_policy[channel].first;
 
-        if (macPolicy != TOKEN_PACKET && macPolicy != FUZZY_TOKEN && macPolicy != FUZZY_TOKEN_PLUS && macPolicy != FUZZY_TOKEN_JUMP_PLUS) {
+        if (macPolicy != TOKEN_PACKET && macPolicy != FUZZY_TOKEN && macPolicy != FUZZY_RCT && macPolicy != FUZZY_RAJ) {
             // checking max hold cycles vs wireless transmission latency
             // consistency
             //TODO move this check: max_hold_cycles depends on the Channel not on the Hub

@@ -204,6 +204,13 @@ Flit Buffer::Front() const
   return f;
 }
 
+Flit& Buffer::FrontMutable()
+{
+  if (IsEmpty())
+    Empty();
+  return buffer.front();
+}
+
 unsigned int Buffer::Size() const
 {
   return buffer.size();
