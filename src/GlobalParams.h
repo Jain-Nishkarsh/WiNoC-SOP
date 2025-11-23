@@ -91,6 +91,7 @@ using namespace std;
 #define TOKEN_PACKET           "TOKEN_PACKET"
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
 #define FUZZY_RCT              "FUZZY_RCT"
+#define FUZZY_EMA              "FUZZY_EMA"
 #define FUZZY_RAJ              "FUZZY_RAJ"
 
 enum ProbabilityDistribution {
@@ -123,6 +124,9 @@ typedef struct {
     
     // Ready-aware jump parameters (FUZZY_RAJ)
     int jump_cooldown;          // Minimum token cycles between jumps (default: 0 = no cooldown)
+
+    // EMA parameters
+    double ema_alpha;           // EMA smoothing factor (default: 0.30)
 } FuzzyTokenConfig;
 
 typedef struct {

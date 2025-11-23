@@ -91,6 +91,9 @@ namespace YAML {
             // Ready-aware jump parameters (FUZZY_RAJ Phase 3)
             config.jump_cooldown = node["jump_cooldown"].as<int>(0);
             
+            // EMA parameters
+            config.ema_alpha = node["ema_alpha"].as<double>(0.30);
+
             return true;
         }
     };

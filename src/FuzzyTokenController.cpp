@@ -23,16 +23,17 @@ FuzzyTokenController* FuzzyTokenController::instance = nullptr;
 
 void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nodes, const vector<int>& nodeIds) {
     config = cfg;
+    EMA_ALPHA = config.ema_alpha;
     numNodes = num_nodes;
     transmissionProb.resize(numNodes, 0.0);
     ready_bitmap.resize(numNodes, false);
     
     // Initialize ready-count trigger parameters
-    ready_history_window = config.ready_history_window;
-    fuzzy_ready_threshold = config.fuzzy_ready_threshold;
-    focused_ready_threshold = config.focused_ready_threshold;
-    fuzzy_consecutive_windows = config.fuzzy_consecutive_windows;
-    focused_consecutive_windows = config.focused_consecutive_windows;
+    // ready_history_window = config.ready_history_window;
+    // fuzzy_ready_threshold = config.fuzzy_ready_threshold;
+    // focused_ready_threshold = config.focused_ready_threshold;
+    // fuzzy_consecutive_windows = config.fuzzy_consecutive_windows;
+    // focused_consecutive_windows = config.focused_consecutive_windows;
     
     // Initialize ready-aware jump parameters
     jump_cooldown = config.jump_cooldown;
@@ -424,53 +425,60 @@ void FuzzyTokenChannelState::logReadyBitmap(int currentCycle) const {
 }
 
 // Ready-count trigger implementations
-void FuzzyTokenChannelState::updateReadyHistory() {
-    int ready_count = countReadyHubs();
-    ready_history.push_back(ready_count);
-    
-    if (ready_history.size() > (size_t)ready_history_window) {
-        ready_history.pop_front();
+void FuzzyTokenChannelState::update_ema(double ready_count, int num_hubs) {
+    double ready_frac = double(ready_count) / double(num_hubs);
+
+    if (!ema_initialized) {
+        // initialize EMA to the first observation to avoid startup bias
+        ema_ready = ready_frac;
+        ema_initialized = 1;
+    } else {
+        ema_ready = (1.0 - EMA_ALPHA) * ema_ready + EMA_ALPHA * ready_frac;
     }
+}
+
+void FuzzyTokenChannelState::updateReadyStats() {
+    int ready_count = countReadyHubs();
+    
+    // Update EMA
+    update_ema((double)ready_count, numNodes);
+
+    // Increment dwell counter
+    dwell_counter++;
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFuzzy() const {
-    if (ready_history.size() < (size_t)fuzzy_consecutive_windows) {
-        return false;
-    }
-    
-    for (size_t i = ready_history.size() - fuzzy_consecutive_windows; i < ready_history.size(); i++) {
-        if (ready_history[i] > fuzzy_ready_threshold) {
-            return false;
-        }
-    }
-    
-    return true;
+    // Check dwell time
+    if (dwell_counter < D_MIN) return false;
+
+    // Check EMA threshold
+    if (ema_ready <= ALPHA_DOWN) return true;
+
+    return false;
 }
 
 bool FuzzyTokenChannelState::shouldSwitchToFocused() const {
-    if (ready_history.size() < (size_t)focused_consecutive_windows) {
-        return false;
-    }
-    
-    for (size_t i = ready_history.size() - focused_consecutive_windows; i < ready_history.size(); i++) {
-        if (ready_history[i] <= focused_ready_threshold) {
-            return false;
-        }
-    }
-    
-    return true;
+    // Check dwell time
+    if (dwell_counter < D_MIN) return false;
+
+    // Check EMA threshold
+    if (ema_ready >= ALPHA_UP) return true;
+
+    return false;
 }
 
 void FuzzyTokenChannelState::checkAndSwitchModeProactive() {
     if (shouldSwitchToFuzzy() && periodMode != FUZZY_MODE) {
         periodMode = FUZZY_MODE;
+        dwell_counter = 0; // Reset dwell counter
         if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-            cerr << "[MODE-SWITCH] FOCUSED -> FUZZY" << endl;
+            cerr << "[MODE-SWITCH] FOCUSED -> FUZZY (EMA=" << ema_ready << ")" << endl;
         }
     } else if (shouldSwitchToFocused() && periodMode != FOCUSED_MODE) {
         periodMode = FOCUSED_MODE;
+        dwell_counter = 0; // Reset dwell counter
         if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-            cerr << "[MODE-SWITCH] FUZZY -> FOCUSED" << endl;
+            cerr << "[MODE-SWITCH] FUZZY -> FOCUSED (EMA=" << ema_ready << ")" << endl;
         }
     }
 }

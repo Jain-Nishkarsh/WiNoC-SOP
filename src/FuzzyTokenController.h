@@ -73,17 +73,28 @@ public:
     vector<bool> ready_bitmap;
     
     // Ready-count trigger (Phase 2)
-    deque<int> ready_history;
-    int ready_history_window;
-    int fuzzy_ready_threshold;
-    int focused_ready_threshold;
-    int fuzzy_consecutive_windows;
-    int focused_consecutive_windows;
+    // deque<int> ready_history; // Removed in favor of EMA
+    // int ready_history_window;
+    // int fuzzy_ready_threshold;
+    // int focused_ready_threshold;
+    // int fuzzy_consecutive_windows;
+    // int focused_consecutive_windows;
     
     // Ready-aware jump
     int cycles_since_last_jump;
     int jump_cooldown;
     
+    // EMA state & params
+    double ema_ready;
+    double EMA_ALPHA;
+    int ema_initialized;
+    
+    // Hysteresis and minimum-dwell
+    const double ALPHA_UP = 0.35;
+    const double ALPHA_DOWN = 0.15;
+    int dwell_counter;
+    const int D_MIN = 12;
+
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -98,7 +109,11 @@ public:
         totalFuzzySteps(0),
         totalFocusedSteps(0),
         activeTransmittersThisStep(0),
-        cycles_since_last_jump(0)
+        cycles_since_last_jump(0),
+        ema_ready(0.0),
+        EMA_ALPHA(0.30),
+        ema_initialized(0),
+        dwell_counter(0)
     {
         fuzzyArea.reset();
     }
@@ -129,7 +144,8 @@ public:
     void logReadyBitmap(int currentCycle) const;
     
     // Ready-count trigger
-    void updateReadyHistory();
+    void updateReadyStats();
+    void update_ema(double ready_count, int num_hubs);
     bool shouldSwitchToFuzzy() const;
     bool shouldSwitchToFocused() const;
     void checkAndSwitchModeProactive();

@@ -1,6 +1,6 @@
-# Tuned FUZZY TOKEN - 8x8 Mesh with Gaussian PI
-# Derived from config_examples/fuzzy_token_8x8.yaml
-# Changes: gaussian pi, tuned silence, AIMD params
+# FUZZY TOKEN PLUS - 8x8 Mesh with Ready-Count Trigger
+# Enhanced version with proactive mode switching based on traffic prediction
+# Uses ready bitmap and history tracking to switch modes before collisions occur
 
 topology: MESH
 mesh_dim_x: 8
@@ -13,8 +13,8 @@ n_virtual_channels: 1
 
 routing_algorithm: XY
 routing_table_filename: ""
-dyad_threshold: 0.6
 # da_threshold: 5
+dyad_threshold: 0.6
 selection_strategy: NOP
 
 Hubs:
@@ -48,11 +48,11 @@ RadioChannels:
     defaults:
         data_rate: 16
         ber: [0, 0]
-        mac_policy: [FUZZY_TOKEN]
+        mac_policy: [FUZZY_RCT]
         fuzzy_token:
             preamble_cycles: 0
-            thr1: 0.4
-            thr2: 0.6
+            thr1: 0.2
+            thr2: 0.5
             thr_is_percentage: true
 
             initial_FA: 8
@@ -64,6 +64,14 @@ RadioChannels:
             min_transmission_prob: 0.05
             initial_token_holder: 0
             token_order: static
+            
+            # Ready-count trigger parameters (Phase 2 ONLY for FUZZY_RCT)
+            ready_history_window: 6           # W: sliding window size for ready count history
+            fuzzy_ready_threshold: 3          # K: max ready hubs for FUZZY (≤3 ready)
+            focused_ready_threshold: 8        # M: min ready hubs for FOCUSED (>8 ready)
+            fuzzy_consecutive_windows: 4      # Consecutive windows ≤K to trigger FUZZY
+            focused_consecutive_windows: 4    # Consecutive windows >M to trigger FOCUSED
+            # Note: Phase 3 (ready-aware jump) is NOT enabled for FUZZY_RCT
 
 clock_period_ps: 1000
 reset_time: 100
