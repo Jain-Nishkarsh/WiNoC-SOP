@@ -52,7 +52,7 @@ RadioChannels:
         fuzzy_token:
             preamble_cycles: 0
             thr1: 0.2
-            thr2: 0.5
+            thr2: 0.6
             thr_is_percentage: true
 
             initial_FA: 8
@@ -74,7 +74,7 @@ min_packet_size: 2
 max_packet_size: 4
 packet_injection_rate: 0.005
 probability_of_retransmission: 0.01
-traffic_distribution: TRAFFIC_TRANSPOSE1
+traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 
 use_winoc: true

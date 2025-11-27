@@ -120,9 +120,6 @@ typedef struct {
     int focused_ready_threshold;     // M: Min ready hubs for FOCUSED mode (>M ready) (default: 8)
     int fuzzy_consecutive_windows;   // Consecutive windows ≤K to trigger FUZZY (default: 4)
     int focused_consecutive_windows; // Consecutive windows >M to trigger FOCUSED (default: 4)
-    
-    // Ready-aware jump parameters (FUZZY_RAJ)
-    int jump_cooldown;          // Minimum token cycles between jumps (default: 0 = no cooldown)
 } FuzzyTokenConfig;
 
 typedef struct {

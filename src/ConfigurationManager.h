@@ -88,9 +88,6 @@ namespace YAML {
             config.fuzzy_consecutive_windows = node["fuzzy_consecutive_windows"].as<int>(4);
             config.focused_consecutive_windows = node["focused_consecutive_windows"].as<int>(4);
             
-            // Ready-aware jump parameters (FUZZY_RAJ Phase 3)
-            config.jump_cooldown = node["jump_cooldown"].as<int>(0);
-            
             return true;
         }
     };

@@ -1160,6 +1160,11 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 		return;
 	}
 	
+	// CRITICAL FIX: Update ready status for this hub immediately before ending step
+	// This ensures RAJ doesn't jump back to this node if it has emptied its buffer
+	bool hasMoreData = !init[channel]->buffer_tx.IsEmpty();
+	state->setHubReady(local_id, hasMoreData);
+
 	// Calculate transmission duration
 	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
 	int step_start = fuzzyTokenStepStartCycle[channel];

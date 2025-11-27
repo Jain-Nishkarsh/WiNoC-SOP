@@ -50,9 +50,6 @@ RadioChannels:
         mac_policy: [FUZZY_RCT]
         fuzzy_token:
             preamble_cycles: 0
-            thr1: 0.2
-            thr2: 0.5
-            thr_is_percentage: true
 
             initial_FA: 8
             FA_increment: 1
@@ -60,16 +57,16 @@ RadioChannels:
             
             pi_type: gaussian
             
-            min_transmission_prob: 0.05
+            min_transmission_prob: 0.1
             initial_token_holder: 0
             token_order: static
             
             # Ready-count trigger parameters (Phase 2 ONLY for FUZZY_TOKEN_PLUS)
-            ready_history_window: 6           # W: sliding window size for ready count history
-            fuzzy_ready_threshold: 3          # K: max ready hubs for FUZZY (≤3 ready)
-            focused_ready_threshold: 8        # M: min ready hubs for FOCUSED (>8 ready)
-            fuzzy_consecutive_windows: 4      # Consecutive windows ≤K to trigger FUZZY
-            focused_consecutive_windows: 4    # Consecutive windows >M to trigger FOCUSED
+            ready_history_window: 6             # W: sliding window size for ready count history
+            fuzzy_ready_threshold: 3            # K: max ready hubs for FUZZY (≤3 ready)
+            focused_ready_threshold: 5         # M: min ready hubs for FOCUSED (>8 ready)
+            fuzzy_consecutive_windows: 3        # Consecutive windows ≤K to trigger FUZZY
+            focused_consecutive_windows: 1      # Consecutive windows >M to trigger FOCUSED
             # Note: Phase 3 (ready-aware jump) is NOT enabled for FUZZY_TOKEN_PLUS
 
 clock_period_ps: 1000
@@ -81,7 +78,7 @@ min_packet_size: 2
 max_packet_size: 4
 packet_injection_rate: 0.005
 probability_of_retransmission: 0.01
-traffic_distribution: TRAFFIC_TRANSPOSE1
+traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 
 use_winoc: true

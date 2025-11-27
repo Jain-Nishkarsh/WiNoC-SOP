@@ -62,6 +62,12 @@ public:
     int totalFocusedSteps;
     map<int, int> FA_size_histogram;
     
+    // New Statistics
+    int totalSwitchesToFuzzy;
+    int totalSwitchesToFocused;
+    long long accumulatedReadyHubs;
+    long long totalReadyChecks;
+    
     // Cache for Gaussian weights
     map<int, vector<double>> gaussian_weights_cache;
 
@@ -80,10 +86,6 @@ public:
     int fuzzy_consecutive_windows;
     int focused_consecutive_windows;
     
-    // Ready-aware jump
-    int cycles_since_last_jump;
-    int jump_cooldown;
-    
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
         tokenID(0),
@@ -97,8 +99,11 @@ public:
         totalSilences(0),
         totalFuzzySteps(0),
         totalFocusedSteps(0),
-        activeTransmittersThisStep(0),
-        cycles_since_last_jump(0)
+        totalSwitchesToFuzzy(0),
+        totalSwitchesToFocused(0),
+        accumulatedReadyHubs(0),
+        totalReadyChecks(0),
+        activeTransmittersThisStep(0)
     {
         fuzzyArea.reset();
     }
