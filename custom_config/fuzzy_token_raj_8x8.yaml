@@ -51,7 +51,7 @@ RadioChannels:
         ber: [0, 0]
         mac_policy: [FUZZY_RAJ]
         fuzzy_token:
-            preamble_cycles: 0
+            preamble_cycles: 2
 
             initial_FA: 8
             FA_increment: 1

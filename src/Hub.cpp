@@ -767,7 +767,7 @@ void Hub::initializeFuzzyToken(int channel)
 	fuzzyTokenStepCycles[channel] = 0;
 	fuzzyTokenPreambleDetected[channel] = false;
 	fuzzyTokenActiveTransmitters[channel] = 0;
-	fuzzyTokenStepStartCycle[channel] = 0;  // Option 2
+	fuzzyTokenStepStartCycle[channel] = GlobalParams::reset_time;  // Option 2
 	fuzzyTokenTransmissionThisStep[channel] = false;  // Option 2
 	fuzzyTokenDeferredCongestion[channel] = false; // no deferred congestion initially
 	
@@ -868,19 +868,38 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			cout << "Warning: Fuzzy Token state not initialized for channel " << channel << endl;
 		return;
 	}
+
+    // Register this hub (idempotent)
+    state->registerHub(this);
+
+    int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+
+	// Track step phases
+	/* 
+	if (fuzzyTokenTransmissionThisStep[channel]) {
+		fuzzyTokenStepStartCycle[channel] = current_cycle;
+		fuzzyTokenTransmissionThisStep[channel] = false;
+	}
+	*/
+	
+	int step_start = fuzzyTokenStepStartCycle[channel];
+    int step_duration = current_cycle - step_start;
+
+    // CONTROL MINISLOT (Cycle 0 of the step)
+    if (step_duration == 0) {
+        state->perform_control_minislot(current_cycle);
+        // Stall this cycle to allow control info to propagate/be processed
+        return;
+    }
+
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
 	
 	string macPolicy = token_ring->getPolicy(channel).first;
 	bool usePlusFeatures = (macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ);
 	bool useJumpFeatures = (macPolicy == FUZZY_RAJ);
 	
-	if (usePlusFeatures) {
-		state->setHubReady(local_id, hasPacketToSend);
-	}
-	
 	if (usePlusFeatures && node->isTokenHolder()) {
 		static int last_history_update_cycle = -1;
-		int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
 		
 		// Update history only once per cycle (token holder coordinates)
 		if (current_cycle != last_history_update_cycle) {
@@ -893,15 +912,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// PAPER-CORRECT: Synchronous step coordination
 	// Steps end after: 1 cycle (silence), 2 cycles (collision), C cycles (success)
 	// Only token holder coordinates step end to ensure ALL nodes register preambles first
-	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+	// int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps); // Already declared above
 	
-	// Track step phases
-	if (fuzzyTokenTransmissionThisStep[channel]) {
-		fuzzyTokenStepStartCycle[channel] = current_cycle;
-		fuzzyTokenTransmissionThisStep[channel] = false;
-	}
-	
-	int step_duration = current_cycle - fuzzyTokenStepStartCycle[channel];
 	
 	// Determine if we have data early (used by focused-mode fast path)
 	bool hasDataEarly = !init[channel]->buffer_tx.IsEmpty();
@@ -978,7 +990,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			int step_cycles = state->config.preamble_cycles;
 			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
-			fuzzyTokenStepStartCycle[channel] = current_cycle;
+			fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
 			fuzzyTokenActiveTransmitters[channel] = 0;
 			for (auto& pair : fuzzyTokenNodes) {
 				if (pair.first == channel) {
@@ -999,7 +1011,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
 				
 				// Start new step immediately with reduced FA
-				fuzzyTokenStepStartCycle[channel] = current_cycle;
+				fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
 				fuzzyTokenActiveTransmitters[channel] = 0;
 				for (auto& pair : fuzzyTokenNodes) {
 					if (pair.first == channel) {
@@ -1159,11 +1171,6 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	if (!state) {
 		return;
 	}
-	
-	// CRITICAL FIX: Update ready status for this hub immediately before ending step
-	// This ensures RAJ doesn't jump back to this node if it has emptied its buffer
-	bool hasMoreData = !init[channel]->buffer_tx.IsEmpty();
-	state->setHubReady(local_id, hasMoreData);
 
 	// Calculate transmission duration
 	int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
@@ -1187,7 +1194,7 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 		fuzzyTokenNodes[channel]->resetStepState();
 	}
 	fuzzyTokenActiveTransmitters[channel] = 0;
-	fuzzyTokenStepStartCycle[channel] = current_cycle; // Start new step
+	fuzzyTokenStepStartCycle[channel] = current_cycle + 1; // Start new step
 	fuzzyTokenTransmissionThisStep[channel] = false;
 }
 
@@ -1231,7 +1238,7 @@ void Hub::handleFuzzyTokenCollision(int channel)
 		fuzzyTokenNodes[channel]->resetStepState();
 	}
 	fuzzyTokenActiveTransmitters[channel] = 0;
-	fuzzyTokenStepStartCycle[channel] = current_cycle; // Start new step
+	fuzzyTokenStepStartCycle[channel] = current_cycle + 1; // Start new step
 	fuzzyTokenTransmissionThisStep[channel] = false;
 	
 	cerr << "[FUZZY-COLLISION-END] Channel " << channel 
@@ -1266,7 +1273,7 @@ void Hub::handleBufferOverflow(int channel) {
 		fuzzyTokenNodes[channel]->resetStepState();
 	}
 	fuzzyTokenActiveTransmitters[channel] = 0;
-	fuzzyTokenStepStartCycle[channel] = current_cycle;
+	fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
 	fuzzyTokenTransmissionThisStep[channel] = false;
 	
     cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 

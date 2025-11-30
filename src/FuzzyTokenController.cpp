@@ -10,6 +10,7 @@
 
 #include "FuzzyTokenController.h"
 #include "Target.h"
+#include "Hub.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
@@ -241,6 +242,47 @@ bool FuzzyTokenChannelState::isInFuzzyArea(int nodeId) const {
     return fuzzyArea.test(nodeId);
 }
 
+void FuzzyTokenChannelState::registerHub(Hub* hub) {
+    for (auto h : registeredHubs) {
+        if (h == hub) return;
+    }
+    registeredHubs.push_back(hub);
+}
+
+void FuzzyTokenChannelState::perform_control_minislot(int currentCycle) {
+    if (lastControlStepCycle == currentCycle) return;
+
+    // Reset ready bitmap
+    fill(ready_bitmap.begin(), ready_bitmap.end(), false);
+    
+    int readyCount = 0;
+    
+    // Poll all registered hubs
+    for (auto hub : registeredHubs) {
+        // Check if hub has data for this channel
+        if (hub->init.find(channelID) != hub->init.end()) {
+             if (!hub->init[channelID]->buffer_tx.IsEmpty()) {
+                 int hubID = hub->local_id;
+                 // Find index in tokenRingOrder
+                 for(int i=0; i<tokenRingOrder.size(); ++i) {
+                     if (tokenRingOrder[i] == hubID) {
+                         ready_bitmap[i] = true;
+                         readyCount++;
+                         break;
+                     }
+                 }
+             }
+        }
+    }
+    
+    lastControlStepCycle = currentCycle;
+    
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+        cout << "Control Minislot for Channel " << channelID << " at cycle " << currentCycle 
+             << ": " << readyCount << " ready nodes." << endl;
+    }
+}
+
 // FuzzyTokenController implementation
 
 void FuzzyTokenController::registerChannel(int channelId, const FuzzyTokenConfig& config, 
@@ -251,6 +293,7 @@ void FuzzyTokenController::registerChannel(int channelId, const FuzzyTokenConfig
     }
     
     FuzzyTokenChannelState* state = new FuzzyTokenChannelState();
+    state->channelID = channelId;
     state->initialize(config, numNodes, nodeIds);
     state->macPolicy = policy;
     channelStates[channelId] = state;
@@ -394,9 +437,12 @@ void FuzzyTokenChannelState::resetStepState() {
 
 // Ready bitmap management implementations
 void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
+    cerr << "ERROR: setHubReady called outside control minislot! This function is deprecated." << endl;
+    /*
     if (hubId >= 0 && hubId < numNodes) {
         ready_bitmap[hubId] = isReady;
     }
+    */
 }
 
 bool FuzzyTokenChannelState::isHubReady(int hubId) const {

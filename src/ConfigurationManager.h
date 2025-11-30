@@ -110,7 +110,9 @@ namespace YAML {
             channelConfig.tokenRingOrder = node["token_ring_order"].as<vector<int> >(GlobalParams::default_channel_configuration.tokenRingOrder);
             
             // Parse fuzzy_token configuration if mac_policy includes FUZZY_TOKEN
-            if (node["fuzzy_token"]) {
+            if (node["fuzzy_token_config"]) {
+                channelConfig.fuzzyTokenConfig = node["fuzzy_token_config"].as<FuzzyTokenConfig>();
+            } else if (node["fuzzy_token"]) {
                 channelConfig.fuzzyTokenConfig = node["fuzzy_token"].as<FuzzyTokenConfig>();
             }
             

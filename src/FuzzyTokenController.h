@@ -38,9 +38,12 @@ enum StepOutcome {
     OUTCOME_CONGESTION
 };
 
+struct Hub;
+
 class FuzzyTokenChannelState {
 public:
     FuzzyTokenMode periodMode;
+    int channelID; // Added channelID
     int tokenID;
     int FA_size;
     bitset<MAX_FUZZY_TOKEN_NODES> fuzzyArea;
@@ -77,6 +80,14 @@ public:
     
     // Ready bitmap (Phase 1)
     vector<bool> ready_bitmap;
+
+    // Control Minislot
+    vector<Hub*> registeredHubs;
+    int lastControlStepCycle;
+    
+    void registerHub(Hub* hub);
+    void perform_control_minislot(int currentCycle);
+    bool isControlMinislotDone(int currentCycle) const { return lastControlStepCycle == currentCycle; }
     
     // Ready-count trigger (Phase 2)
     deque<int> ready_history;
@@ -88,6 +99,7 @@ public:
     
     FuzzyTokenChannelState() : 
         periodMode(FUZZY_MODE),
+        channelID(-1),
         tokenID(0),
         FA_size(0),
         currentStepCycles(0),
@@ -103,7 +115,8 @@ public:
         totalSwitchesToFocused(0),
         accumulatedReadyHubs(0),
         totalReadyChecks(0),
-        activeTransmittersThisStep(0)
+        activeTransmittersThisStep(0),
+        lastControlStepCycle(-1)
     {
         fuzzyArea.reset();
     }
