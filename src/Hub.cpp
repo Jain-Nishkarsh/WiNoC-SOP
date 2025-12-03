@@ -889,7 +889,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
     if (step_duration == 0) {
         state->perform_control_minislot(current_cycle);
         // Stall this cycle to allow control info to propagate/be processed
-        return;
+        // return; 
     }
 
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
