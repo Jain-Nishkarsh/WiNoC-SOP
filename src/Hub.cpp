@@ -843,6 +843,7 @@ void Hub::sendNack(int channel)
 
 void Hub::txRadioProcessFuzzyToken(int channel)
 {
+    // cerr << "DEBUG: Hub " << local_id << " txRadioProcessFuzzyToken ch=" << channel << endl;
 	static int fuzzy_call_count = 0;
 	fuzzy_call_count++;
 	
@@ -859,8 +860,10 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	}
 	
 	FuzzyTokenNode* node = fuzzyTokenNodes[channel];
+    // cerr << "DEBUG: Hub " << local_id << " node=" << node << endl;
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
 	FuzzyTokenChannelState* state = controller.getChannelState(channel);
+    // cerr << "DEBUG: Hub " << local_id << " state=" << state << endl;
 	
 	// NULL CHECK FIRST - return early if state not initialized yet
 	if (!state)
@@ -882,6 +885,17 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		fuzzyTokenTransmissionThisStep[channel] = false;
 	}
 	*/
+
+    // Synchronize with global step cycle (driven by Token Holder)
+    if (state->step_start_cycle > fuzzyTokenStepStartCycle[channel]) {
+        fuzzyTokenStepStartCycle[channel] = state->step_start_cycle;
+        fuzzyTokenActiveTransmitters[channel] = 0;
+        for (auto& pair : fuzzyTokenNodes) {
+            if (pair.first == channel) {
+                pair.second->resetStepState();
+            }
+        }
+    }
 	
 	int step_start = fuzzyTokenStepStartCycle[channel];
 	

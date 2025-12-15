@@ -1,0 +1,71 @@
+mesh_dim_x: 4
+mesh_dim_y: 2
+r2h_link_length: 2.0
+r2r_link_length: 1.0
+n_virtual_channels: 1
+topology: MESH
+routing_algorithm: XY
+dyad_threshold: 0.6
+routing_table_filename: ""
+selection_strategy: RANDOM
+buffer_depth: 4
+flit_size: 32
+min_packet_size: 2
+max_packet_size: 10
+packet_injection_rate: 0.01
+probability_of_retransmission: 0.01
+traffic_distribution: TRAFFIC_TABLE_BASED
+traffic_table_filename: "traffic.txt"
+simulation_time: 100
+max_volume_to_be_drained: 0
+clock_period_ps: 1000
+reset_time: 50
+stats_warm_up_time: 0
+detailed: true
+csv_log_enabled: true
+use_winoc: true
+use_wirxsleep: false
+show_buffer_stats: false
+verbose_mode: 1
+trace_mode: false
+trace_filename: "trace"
+csv_mac_log_filename: "output.csv"
+csv_routing_log_filename: ""
+
+Hubs:
+  defaults:
+    rx_radio_channels: [0]
+    tx_radio_channels: [0]
+    to_tile_buffer_size: 4
+    from_tile_buffer_size: 4
+    rx_buffer_size: 4
+    tx_buffer_size: 4
+  0: { attached_nodes: [0] }
+  1: { attached_nodes: [1] }
+  2: { attached_nodes: [2] }
+  3: { attached_nodes: [3] }
+  4: { attached_nodes: [4] }
+  5: { attached_nodes: [5] }
+  6: { attached_nodes: [6] }
+  7: { attached_nodes: [7] }
+
+RadioChannels:
+  defaults:
+    data_rate: 64
+    mac_policy: [FUZZY_TOKEN]
+    fuzzy_token:
+      initial_FA: 3
+      FA_increment: 1
+      FA_decrement_factor: 0.5
+      preamble_cycles: 1
+      token_order: "static"
+      initial_token_holder: 0
+      pi_type: equal
+      # Thresholds
+      ready_history_window: 6
+      fuzzy_ready_threshold: 3
+      focused_ready_threshold: 8
+      fuzzy_consecutive_windows: 4
+      focused_consecutive_windows: 4
+  0:
+    data_rate: 64

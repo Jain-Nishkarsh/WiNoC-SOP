@@ -390,7 +390,6 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
 
     // 5. Log to CSV
     if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
-        cerr << "DEBUG: Logging step " << state->step_id << endl;
         const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
                                   (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
                                   (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
