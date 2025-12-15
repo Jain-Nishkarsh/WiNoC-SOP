@@ -884,6 +884,13 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	*/
 	
 	int step_start = fuzzyTokenStepStartCycle[channel];
+	
+	// FIX: Enforce 1-cycle delay for FOCUSED mode SILENCE
+	// If the next step is scheduled for the future, do not process yet.
+	if (current_cycle < step_start) {
+		return;
+	}
+
     int step_duration = current_cycle - step_start;
 
     // CONTROL MINISLOT (Cycle 0 of the step)
@@ -922,6 +929,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// Focused-mode fast path:
 	// In focused mode there are no preambles; the token holder should immediately transmit if it has data.
 	// Only if the token holder has no data should we end the step as SILENCE and advance the token.
+
 	if (state->getMode() == FOCUSED_MODE) {
 		if (node->isTokenHolder() && GlobalParams::verbose_mode == VERBOSE_HIGH) {
 			state->logReadyBitmap(current_cycle);
@@ -959,9 +967,11 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					     << ") has no data, advancing token (SILENCE)" << endl;
 				}
 				// FOCUSED mode: immediate token advance, no silence_cycles delay
-				controller.endStep(channel, OUTCOME_SILENCE, 0);
-				// Start new step immediately
-				fuzzyTokenStepStartCycle[channel] = current_cycle;
+				// FIX: User requires SILENCE duration = 1 cycle.
+				controller.endStep(channel, OUTCOME_SILENCE, 1);
+				
+				// Start new step in NEXT cycle to ensure 1-cycle duration
+				fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
 				fuzzyTokenActiveTransmitters[channel] = 0;
 				for (auto& pair : fuzzyTokenNodes) {
 					if (pair.first == channel) {
