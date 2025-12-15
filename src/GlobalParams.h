@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 #include <string>
+#include <fstream>
 
 using namespace std;
 
@@ -211,6 +212,14 @@ struct GlobalParams {
     static bool use_winoc;
     static int winoc_dst_hops;
     static bool use_powermanager;
+
+    // CSV Logging
+    static bool csv_log_enabled;
+    static string csv_routing_log_filename;
+    static string csv_mac_log_filename;
+    static ofstream csv_routing_log_stream;
+    static ofstream csv_mac_log_stream;
+
     static ChannelConfig default_channel_configuration;
     static map<int, ChannelConfig> channel_configuration;
     static HubConfig default_hub_configuration;

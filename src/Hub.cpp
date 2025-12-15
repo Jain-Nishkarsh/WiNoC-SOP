@@ -10,6 +10,7 @@
  */
 #include "Hub.h"
 #include <algorithm>
+#include "GlobalParams.h"
 
 int Hub::tile2Port(int id)
 {

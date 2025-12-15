@@ -86,3 +86,8 @@ trace_mode: false
 trace_filename: ""
 max_volume_to_be_drained: 0
 show_buffer_stats: false
+
+# CSV Logging
+csv_log_enabled: true
+csv_routing_log_filename: ""
+csv_mac_log_filename: "test_mac.csv"

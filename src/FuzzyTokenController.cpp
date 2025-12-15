@@ -276,6 +276,7 @@ void FuzzyTokenChannelState::perform_control_minislot(int currentCycle) {
     }
     
     lastControlStepCycle = currentCycle;
+    step_start_cycle = currentCycle;
     
     if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
         cout << "Control Minislot for Channel " << channelID << " at cycle " << currentCycle 
@@ -319,10 +320,104 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
                                   (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
         cerr << "[STEP-END] Channel " << channelId << " outcome=" << outcome_str << endl;
     }
+
+    // --- Detailed CSV Logging Logic ---
     
+    // 1. Capture Pre-Update State
+    int fa_old_size = state->FA_size;
+    
+    // Construct Node Lists (FA and Ready) BEFORE update
+    stringstream fa_nodes_ss;
+    bool first = true;
+    for(int i=0; i<state->numNodes; ++i) {
+        if(state->isInFuzzyArea(i)) {
+            if(!first) fa_nodes_ss << "|";
+            fa_nodes_ss << i;
+            first = false;
+        }
+    }
+    string fa_nodes = fa_nodes_ss.str();
+    if (fa_nodes.empty()) fa_nodes = "-";
+
+    stringstream tx_attempt_ss;
+    first = true;
+    int success_node = -1;
+    for(int node : state->transmittingHubsThisStep) {
+        if(!first) tx_attempt_ss << "|";
+        tx_attempt_ss << node;
+        first = false;
+        if (outcome == OUTCOME_SUCCESS) success_node = node;
+    }
+    string tx_attempt_nodes = tx_attempt_ss.str();
+    if (tx_attempt_nodes.empty()) tx_attempt_nodes = "-";
+
+    stringstream ready_nodes_ss;
+    stringstream ready_in_fa_ss;
+    first = true;
+    bool first_fa = true;
+    for(int i=0; i<state->numNodes; ++i) {
+        if(state->isHubReady(i)) {
+            if(!first) ready_nodes_ss << "|";
+            ready_nodes_ss << i;
+            first = false;
+
+            if(state->isInFuzzyArea(i)) {
+                if(!first_fa) ready_in_fa_ss << "|";
+                ready_in_fa_ss << i;
+                first_fa = false;
+            }
+        }
+    }
+    string ready_nodes = ready_nodes_ss.str();
+    if (ready_nodes.empty()) ready_nodes = "-";
+    string ready_in_fa_nodes = ready_in_fa_ss.str();
+    if (ready_in_fa_nodes.empty()) ready_in_fa_nodes = "-";
+
+    // 2. Update State
     // Always update FA_size to track contention (needed for baseline FUZZY_TOKEN mode switching)
-    // FA_size is used in FUZZY mode for fuzzy area, and checked by switchMode() for reactive switching
     state->updateFuzzyArea(outcome);
+    int fa_new_size = state->FA_size;
+
+    // 3. Determine Update Type
+    string fa_update = "NONE";
+    if (fa_new_size > fa_old_size) fa_update = "INC";
+    else if (fa_new_size < fa_old_size) fa_update = "DEC";
+
+    // 4. NACK Logic
+    int nack_sent = (outcome == OUTCOME_COLLISION) ? 1 : 0;
+    int nack_sender = (outcome == OUTCOME_COLLISION) ? state->tokenID : -1;
+
+    // 5. Log to CSV
+    if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
+        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
+                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+        const char* mode_str = (state->periodMode == FUZZY_MODE) ? "FUZZY" : "FOCUSED";
+        
+        GlobalParams::csv_mac_log_stream 
+            << state->step_start_cycle << ","
+            << state->step_id << ","
+            << outcome_str << ","
+            << stepCycles << ","
+            << state->tokenID << ","
+            << mode_str << ","
+            << fa_old_size << ","
+            << state->tokenID << ","
+            << fa_nodes << ","
+            << fa_update << ","
+            << fa_old_size << ","
+            << fa_new_size << ","
+            << tx_attempt_nodes << ","
+            << success_node << ","
+            << ready_nodes << ","
+            << ready_in_fa_nodes << ","
+            << nack_sent << ","
+            << nack_sender
+            << endl;
+    }
+    
+    // Increment Step ID
+    state->step_id++;
     
     // Record FA_size statistics for all policies
     state->FA_size_histogram[state->FA_size]++;

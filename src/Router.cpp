@@ -136,6 +136,21 @@ void Router::txProcess()
 		      // TODO: see PER POSTERI (adaptive routing should not recompute route if already reserved)
 		      int o = route(route_data);
 
+              // CSV Logging for Routing Decision
+              if (GlobalParams::csv_log_enabled && GlobalParams::csv_routing_log_stream.is_open()) {
+                  GlobalParams::csv_routing_log_stream 
+                      << (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps) << ","
+                      << local_id << ","
+                      << flit.src_id << ","
+                      << flit.dst_id << ","
+                      << flit.flit_type << ","
+                      << flit.sequence_no << ","
+                      << i << ","
+                      << o << ","
+                      << vc
+                      << endl;
+              }
+
 		      // manage special case of target hub not directly connected to destination
 		      if (o>=DIRECTION_HUB_RELAY)
 			  {

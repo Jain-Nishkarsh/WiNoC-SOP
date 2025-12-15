@@ -49,6 +49,11 @@ void loadConfiguration() {
     GlobalParams::trace_mode = readParam<bool>(config, "trace_mode");
     GlobalParams::trace_filename = readParam<string>(config, "trace_filename");
 
+    // CSV Logging
+    GlobalParams::csv_log_enabled = readParam<bool>(config, "csv_log_enabled", false);
+    GlobalParams::csv_routing_log_filename = readParam<string>(config, "csv_routing_log_filename", "routing_log.csv");
+    GlobalParams::csv_mac_log_filename = readParam<string>(config, "csv_mac_log_filename", "mac_log.csv");
+
     GlobalParams::topology = readParam<string>(config, "topology", TOPOLOGY_MESH);
 
     //Mesh network params

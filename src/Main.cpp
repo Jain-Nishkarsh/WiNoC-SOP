@@ -51,6 +51,30 @@ int sc_main(int arg_num, char *arg_vet[])
 
     configure(arg_num, arg_vet);
 
+    // Initialize CSV Logs
+    if (GlobalParams::csv_log_enabled) {
+        // Routing Log (Conditional)
+        if (!GlobalParams::csv_routing_log_filename.empty()) {
+            GlobalParams::csv_routing_log_stream.open(GlobalParams::csv_routing_log_filename.c_str());
+            if (GlobalParams::csv_routing_log_stream.is_open()) {
+                GlobalParams::csv_routing_log_stream << "Cycle,NodeID,Src,Dst,FlitType,Seq,InputPort,OutputPort,VC" << endl;
+                cout << "CSV Routing Log enabled: " << GlobalParams::csv_routing_log_filename << endl;
+            } else {
+                cerr << "Error opening CSV routing log file: " << GlobalParams::csv_routing_log_filename << endl;
+            }
+        }
+
+        // MAC Log
+        if (!GlobalParams::csv_mac_log_filename.empty()) {
+            GlobalParams::csv_mac_log_stream.open(GlobalParams::csv_mac_log_filename.c_str());
+            if (GlobalParams::csv_mac_log_stream.is_open()) {
+                GlobalParams::csv_mac_log_stream << "sim_cycle,step_id,event_type,event_duration,token_id,period_mode,fa_size,fa_center,fa_nodes,fa_update,fa_old_size,fa_new_size,tx_attempt_nodes,tx_success_node,ready_nodes,ready_in_fa_nodes,nack_sent,nack_sender" << endl;
+                cout << "CSV MAC Log enabled: " << GlobalParams::csv_mac_log_filename << endl;
+            } else {
+                cerr << "Error opening CSV MAC log file: " << GlobalParams::csv_mac_log_filename << endl;
+            }
+        }
+    }
 
     // Signals
     sc_clock clock("clock", GlobalParams::clock_period_ps, SC_PS);
@@ -112,6 +136,7 @@ int sc_main(int arg_num, char *arg_vet[])
 
     // Close the simulation
     if (GlobalParams::trace_mode) sc_close_vcd_trace_file(tf);
+    
     cout << "Noxim simulation completed.";
     cout << " (" << sc_time_stamp().to_double() / GlobalParams::clock_period_ps << " cycles executed)" << endl;
     cout << endl;
@@ -120,6 +145,15 @@ int sc_main(int arg_num, char *arg_vet[])
     GlobalStats gs(n);
     gs.showStats(std::cout, GlobalParams::detailed);
 
+    // Close CSV Logs
+    if (GlobalParams::csv_log_enabled) {
+        if (GlobalParams::csv_routing_log_stream.is_open()) {
+            GlobalParams::csv_routing_log_stream.close();
+        }
+        if (GlobalParams::csv_mac_log_stream.is_open()) {
+            GlobalParams::csv_mac_log_stream.close();
+        }
+    }
 
     if ((GlobalParams::max_volume_to_be_drained > 0) &&
 	(sc_time_stamp().to_double() / GlobalParams::clock_period_ps - GlobalParams::reset_time >=

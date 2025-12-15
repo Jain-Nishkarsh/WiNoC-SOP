@@ -85,6 +85,10 @@ public:
     vector<Hub*> registeredHubs;
     int lastControlStepCycle;
     
+    // Step Tracking for CSV
+    long long step_id;
+    int step_start_cycle;
+    
     void registerHub(Hub* hub);
     void perform_control_minislot(int currentCycle);
     bool isControlMinislotDone(int currentCycle) const { return lastControlStepCycle == currentCycle; }
@@ -116,7 +120,9 @@ public:
         accumulatedReadyHubs(0),
         totalReadyChecks(0),
         activeTransmittersThisStep(0),
-        lastControlStepCycle(-1)
+        lastControlStepCycle(-1),
+        step_id(0),
+        step_start_cycle(0)
     {
         fuzzyArea.reset();
     }

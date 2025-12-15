@@ -52,6 +52,14 @@ bool GlobalParams::show_buffer_stats;
 bool GlobalParams::use_winoc;
 int GlobalParams::winoc_dst_hops;
 bool GlobalParams::use_powermanager;
+
+// CSV Logging
+bool GlobalParams::csv_log_enabled;
+string GlobalParams::csv_routing_log_filename;
+string GlobalParams::csv_mac_log_filename;
+ofstream GlobalParams::csv_routing_log_stream;
+ofstream GlobalParams::csv_mac_log_stream;
+
 ChannelConfig GlobalParams::default_channel_configuration;
 map<int, ChannelConfig> GlobalParams::channel_configuration;
 HubConfig GlobalParams::default_hub_configuration;
