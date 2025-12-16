@@ -90,7 +90,7 @@ public:
     int step_start_cycle;
     
     void registerHub(Hub* hub);
-    void perform_control_minislot(int currentCycle);
+    void perform_control_minislot(int currentCycle, bool enable_polling = true);
     bool isControlMinislotDone(int currentCycle) const { return lastControlStepCycle == currentCycle; }
     
     // Ready-count trigger (Phase 2)

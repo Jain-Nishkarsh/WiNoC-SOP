@@ -74,6 +74,8 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
     switch (outcome) {
         case OUTCOME_COLLISION:
             totalCollisions++;
+            FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
+            if (FA_size < 1) FA_size = 1;
             break;
             
         case OUTCOME_CONGESTION:
@@ -250,7 +252,7 @@ void FuzzyTokenChannelState::registerHub(Hub* hub) {
     registeredHubs.push_back(hub);
 }
 
-void FuzzyTokenChannelState::perform_control_minislot(int currentCycle) {
+void FuzzyTokenChannelState::perform_control_minislot(int currentCycle, bool enable_polling) {
     if (lastControlStepCycle == currentCycle) return;
 
     // Reset ready bitmap
@@ -258,28 +260,30 @@ void FuzzyTokenChannelState::perform_control_minislot(int currentCycle) {
     
     int readyCount = 0;
     
-    // Poll all registered hubs
-    for (auto hub : registeredHubs) {
-        // Check if hub has data for this channel
-        if (hub->init.find(channelID) != hub->init.end()) {
-             if (!hub->init[channelID]->buffer_tx.IsEmpty()) {
-                 int hubID = hub->local_id;
-                 // Find index in tokenRingOrder
-                 for(int i=0; i<tokenRingOrder.size(); ++i) {
-                     if (tokenRingOrder[i] == hubID) {
-                         ready_bitmap[i] = true;
-                         readyCount++;
-                         break;
+    if (enable_polling) {
+        // Poll all registered hubs
+        for (auto hub : registeredHubs) {
+            // Check if hub has data for this channel
+            if (hub->init.find(channelID) != hub->init.end()) {
+                 if (!hub->init[channelID]->buffer_tx.IsEmpty()) {
+                     int hubID = hub->local_id;
+                     // Find index in tokenRingOrder
+                     for(int i=0; i<tokenRingOrder.size(); ++i) {
+                         if (tokenRingOrder[i] == hubID) {
+                             ready_bitmap[i] = true;
+                             readyCount++;
+                             break;
+                         }
                      }
                  }
-             }
+            }
         }
     }
     
     lastControlStepCycle = currentCycle;
     step_start_cycle = currentCycle;
     
-    if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH && enable_polling) {
         cout << "Control Minislot for Channel " << channelID << " at cycle " << currentCycle 
              << ": " << readyCount << " ready nodes." << endl;
     }

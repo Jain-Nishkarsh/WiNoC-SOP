@@ -907,18 +907,19 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 
     int step_duration = current_cycle - step_start;
 
+	string macPolicy = token_ring->getPolicy(channel).first;
+	bool usePlusFeatures = (macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ);
+	bool useJumpFeatures = (macPolicy == FUZZY_RAJ);
+
     // CONTROL MINISLOT (Cycle 0 of the step)
     if (step_duration == 0) {
-        state->perform_control_minislot(current_cycle);
+        state->perform_control_minislot(current_cycle, usePlusFeatures);
+        node->resetStepState();
         // Stall this cycle to allow control info to propagate/be processed
         // return; 
     }
 
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
-	
-	string macPolicy = token_ring->getPolicy(channel).first;
-	bool usePlusFeatures = (macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ);
-	bool useJumpFeatures = (macPolicy == FUZZY_RAJ);
 	
 	if (usePlusFeatures && node->isTokenHolder()) {
 		static int last_history_update_cycle = -1;
@@ -1001,7 +1002,14 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// - Handles SILENCE and COLLISION outcomes even if the token holder itself is not transmitting
 	// - Prevents multiple initiators from proceeding when the token holder is idle
 	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
-	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= state->config.preamble_cycles) {
+    int check_cycle = state->config.preamble_cycles;
+    if (!usePlusFeatures) check_cycle = std::max(0, check_cycle - 1);
+
+    if (state->getMode() == FUZZY_MODE && node->isTokenHolder()) {
+        cout << "Hub " << local_id << " Cycle " << current_cycle << " check_cycle=" << check_cycle << " dur=" << step_duration << " policy=" << macPolicy << endl;
+    }
+
+	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= check_cycle) {
 		if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
 			state->logReadyBitmap(current_cycle);
 		}
@@ -1016,6 +1024,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
 			fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
+			state->step_start_cycle = fuzzyTokenStepStartCycle[channel];
 			fuzzyTokenActiveTransmitters[channel] = 0;
 			for (auto& pair : fuzzyTokenNodes) {
 				if (pair.first == channel) {
@@ -1032,11 +1041,12 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					     << " transmitters" << endl;
 				}
 
-				int step_cycles = state->config.preamble_cycles;
+				int step_cycles = state->config.preamble_cycles + 1;
 				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
 				
 				// Start new step immediately with reduced FA
 				fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
+				state->step_start_cycle = fuzzyTokenStepStartCycle[channel];
 				fuzzyTokenActiveTransmitters[channel] = 0;
 				for (auto& pair : fuzzyTokenNodes) {
 					if (pair.first == channel) {
@@ -1220,6 +1230,7 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	}
 	fuzzyTokenActiveTransmitters[channel] = 0;
 	fuzzyTokenStepStartCycle[channel] = current_cycle + 1; // Start new step
+	if (state) state->step_start_cycle = fuzzyTokenStepStartCycle[channel];
 	fuzzyTokenTransmissionThisStep[channel] = false;
 }
 
