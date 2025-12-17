@@ -131,7 +131,7 @@ public:
     void updateFuzzyArea(StepOutcome outcome);
     void updateTransmissionProbabilities();
     void advanceToken();
-    void switchMode();
+    void switchMode(StepOutcome outcome);
     void rebuildFuzzyArea();
     double getTransmissionProbability(int nodeId) const;
     bool isInFuzzyArea(int nodeId) const;

@@ -79,9 +79,10 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             break;
             
         case OUTCOME_CONGESTION:
-            FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
-            if (FA_size < 1) FA_size = 1;
-            else totalCongestions++;
+            // FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
+            // if (FA_size < 1) FA_size = 1;
+            // else totalCongestions++;
+            totalCongestions++;
             break;
             
         case OUTCOME_SUCCESS:
@@ -218,17 +219,19 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     updateTransmissionProbabilities();
 }
 
-void FuzzyTokenChannelState::switchMode() {
+void FuzzyTokenChannelState::switchMode(StepOutcome outcome) {
     double thr1_value = config.thr_is_percentage ? config.thr1 * numNodes : config.thr1;
     double thr2_value = config.thr_is_percentage ? config.thr2 * numNodes : config.thr2;
     
     if (periodMode == FUZZY_MODE) {
-        if (FA_size < thr1_value) {
+        // Transition: Collision AND (fuzzyArea < thr2)
+        if (outcome == OUTCOME_COLLISION && FA_size < thr2_value) {
             periodMode = FOCUSED_MODE;
             totalSwitchesToFocused++;
         }
     } else {
-        if (FA_size > thr2_value) {
+        // Transition: Silence AND (fuzzyArea > thr1)
+        if (outcome == OUTCOME_SILENCE && FA_size > thr1_value) {
             periodMode = FUZZY_MODE;
             totalSwitchesToFuzzy++;
         }
@@ -445,7 +448,7 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     }
     
     if (!usePlusFeatures) {
-        state->switchMode();
+        state->switchMode(outcome);
     }
     
     state->resetStepState();

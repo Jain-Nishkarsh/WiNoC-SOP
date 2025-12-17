@@ -50,31 +50,31 @@ RadioChannels:
         ber: [0, 0]
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
-            preamble_cycles: 0
-            thr1: 0.2
+            preamble_cycles: 1
+            thr1: 0.4
             thr2: 0.6
             thr_is_percentage: true
 
             initial_FA: 8
             FA_increment: 1
-            FA_decrement_factor: 0.4
+            FA_decrement_factor: 0.5
             
             pi_type: gaussian
             
-            min_transmission_prob: 0.05
+            min_transmission_prob: 0.01
             initial_token_holder: 0
             token_order: static
 
 clock_period_ps: 1000
-reset_time: 100
-simulation_time: 5000  
+reset_time: 50
+simulation_time: 500  
 stats_warm_up_time: 0
 
 min_packet_size: 2
 max_packet_size: 4
-packet_injection_rate: 0.005
+packet_injection_rate: 0.01
 probability_of_retransmission: 0.01
-traffic_distribution: TRAFFIC_RANDOM
+traffic_distribution: TRAFFIC_TRANSPOSE1
 traffic_table_filename: ""
 
 use_winoc: true

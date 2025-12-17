@@ -47,7 +47,7 @@ RadioChannels:
         mac_policy: [TOKEN_PACKET]
 
 clock_period_ps: 1000
-reset_time: 100
+reset_time: 50
 simulation_time: 5000
 stats_warm_up_time: 0
 

@@ -6,15 +6,15 @@ topology: MESH
 mesh_dim_x: 8
 mesh_dim_y: 8
 buffer_depth: 32
-flit_size: 32
+flit_size: 16
 r2h_link_length: 2.0
 r2r_link_length: 1.0
 n_virtual_channels: 1
 
-routing_algorithm: DISTANCE_AWARE
+routing_algorithm: XY
 routing_table_filename: ""
 dyad_threshold: 0.6
-da_threshold: 5
+# da_threshold: 5
 selection_strategy: NOP
 
 Hubs:
@@ -106,21 +106,17 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            # Switch to FOCUSED when FA shrinks below 25% of nodes (4 hubs)
-            thr1: 4
-            # Switch back to FUZZY when FA grows above 37.5% of nodes (6 hubs)
-            thr2: 6
-            thr_is_percentage: false
-            # Start with moderate FA for better initial throughput
-            initial_FA: 2
-            # Faster growth to reach optimal contention quickly
-            FA_increment: 1
-            # Moderate shrink only for TRUE collisions (rare now)
-            FA_decrement_factor: 0.5
-            # Gaussian distribution around token holder
+            thr1: 0.2
+            thr2: 0.4
+            thr_is_percentage: true
+
+            initial_FA: 16
+            FA_increment: 2
+            FA_decrement_factor: 0.8
+            
             pi_type: gaussian
-            # Small floor to give edge nodes some chance
-            min_transmission_prob: 0.05
+            
+            min_transmission_prob: 0.01
             initial_token_holder: 0
             token_order: static
 
