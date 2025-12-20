@@ -51,8 +51,8 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.4
-            thr2: 0.6
+            thr1: 0.3
+            thr2: 0.7
             thr_is_percentage: true
 
             initial_FA: 8
@@ -61,14 +61,14 @@ RadioChannels:
             
             pi_type: gaussian
             
-            min_transmission_prob: 0.01
+            min_transmission_prob: 0.4
             initial_token_holder: 0
             token_order: static
 
 clock_period_ps: 1000
-reset_time: 50
+reset_time: 100
 simulation_time: 500  
-stats_warm_up_time: 0
+stats_warm_up_time: 100
 
 min_packet_size: 2
 max_packet_size: 4
@@ -88,6 +88,6 @@ max_volume_to_be_drained: 0
 show_buffer_stats: false
 
 # CSV Logging
-csv_log_enabled: true
+csv_log_enabled: false
 csv_routing_log_filename: ""
 csv_mac_log_filename: "test_mac.csv"

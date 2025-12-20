@@ -1005,10 +1005,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
     int check_cycle = state->config.preamble_cycles;
     if (!usePlusFeatures) check_cycle = std::max(0, check_cycle - 1);
 
-    if (state->getMode() == FUZZY_MODE && node->isTokenHolder()) {
-        cout << "Hub " << local_id << " Cycle " << current_cycle << " check_cycle=" << check_cycle << " dur=" << step_duration << " policy=" << macPolicy << endl;
-    }
-
 	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= check_cycle) {
 		if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
 			state->logReadyBitmap(current_cycle);
@@ -1031,6 +1027,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					pair.second->resetStepState();
 				}
 			}
+			return;
 		} else if (active_count > 1) {
 			static int last_collision_cycle = -1;
 			if (current_cycle != last_collision_cycle) {
@@ -1074,12 +1071,13 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		if (mode == FUZZY_MODE)
 		{
 			// PAPER-CORRECT: Fuzzy Token Protocol Phases
-			// Phase 1 (Preamble): All nodes in FA send preambles
+			// Per paper: Token holder CANNOT transmit in FUZZY mode (only listens and sends NACK)
+			// Phase 1 (Preamble): Non-holder nodes in FA send preambles
 			// Phase 2 (Collision Detection): Token holder detects collision after preamble_cycles
-			// Phase 3 (Transmission): Only if no collision, winner transmits
+			// Phase 3 (Transmission): Only if no collision, winner (non-holder) transmits
 			
-			// Phase 1: Send preamble (happens once per step)
-			if (!node->hasSentPreamble())
+			// Phase 1: Send preamble (happens once per step, only for non-holders)
+			if (!node->hasSentPreamble() && !node->isTokenHolder())
 			{
 				node->startPreamble();
 				

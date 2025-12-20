@@ -35,8 +35,11 @@ bool FuzzyTokenNode::shouldAttemptTransmission(bool hasData) {
                 // In focused mode, only token holder can transmit; no probability involved
                 decision = (state->getTokenHolder() == nodeId);
             } else { // FUZZY_MODE
-                // In fuzzy mode, nodes in fuzzy area transmit with probability p[i]
-                if (!state->isInFuzzyArea(nodeId)) {
+                // Paper: In FUZZY mode, token holder CANNOT transmit (only listens/sends NACK)
+                // Only non-holders in fuzzy area can transmit with probability p[i]
+                if (state->getTokenHolder() == nodeId) {
+                    decision = false; // Token holder is silent in FUZZY mode
+                } else if (!state->isInFuzzyArea(nodeId)) {
                     decision = false;
                 } else {
                     double p = state->getTransmissionProbability(nodeId);

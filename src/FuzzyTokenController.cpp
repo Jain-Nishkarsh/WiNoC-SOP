@@ -220,8 +220,8 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
 }
 
 void FuzzyTokenChannelState::switchMode(StepOutcome outcome) {
-    double thr1_value = config.thr_is_percentage ? config.thr1 * numNodes : config.thr1;
-    double thr2_value = config.thr_is_percentage ? config.thr2 * numNodes : config.thr2;
+    double thr1_value = config.thr_is_percentage ? ceil(config.thr1 * numNodes) : config.thr1;
+    double thr2_value = config.thr_is_percentage ? floor(config.thr2 * numNodes) : config.thr2;
     
     if (periodMode == FUZZY_MODE) {
         // Transition: Collision AND (fuzzyArea < thr2)
