@@ -114,6 +114,8 @@ namespace YAML {
                 channelConfig.fuzzyTokenConfig = node["fuzzy_token_config"].as<FuzzyTokenConfig>();
             } else if (node["fuzzy_token"]) {
                 channelConfig.fuzzyTokenConfig = node["fuzzy_token"].as<FuzzyTokenConfig>();
+            } else {
+                channelConfig.fuzzyTokenConfig = GlobalParams::default_channel_configuration.fuzzyTokenConfig;
             }
             
             return true;

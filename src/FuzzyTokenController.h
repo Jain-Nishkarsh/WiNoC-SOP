@@ -90,7 +90,7 @@ public:
     int step_start_cycle;
     
     void registerHub(Hub* hub);
-    void perform_control_minislot(int currentCycle);
+    void perform_control_minislot(int currentCycle, bool enable_polling = true);
     bool isControlMinislotDone(int currentCycle) const { return lastControlStepCycle == currentCycle; }
     
     // Ready-count trigger (Phase 2)
@@ -131,7 +131,7 @@ public:
     void updateFuzzyArea(StepOutcome outcome);
     void updateTransmissionProbabilities();
     void advanceToken();
-    void switchMode();
+    void switchMode(StepOutcome outcome);
     void rebuildFuzzyArea();
     double getTransmissionProbability(int nodeId) const;
     bool isInFuzzyArea(int nodeId) const;

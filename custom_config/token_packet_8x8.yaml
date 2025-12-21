@@ -1,7 +1,7 @@
 topology: MESH
 mesh_dim_x: 8
 mesh_dim_y: 8
-buffer_depth: 32
+buffer_depth: 64
 flit_size: 16
 r2h_link_length: 2.0
 r2r_link_length: 1.0
@@ -48,14 +48,14 @@ RadioChannels:
 
 clock_period_ps: 1000
 reset_time: 100
-simulation_time: 5000
-stats_warm_up_time: 0
+simulation_time: 500
+stats_warm_up_time: 100
 
 min_packet_size: 2
 max_packet_size: 4
-packet_injection_rate: 0.003
+packet_injection_rate: 0.01
 probability_of_retransmission: 0.01
-traffic_distribution: TRAFFIC_TRANSPOSE1
+traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 
 use_winoc: true

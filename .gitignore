@@ -6,3 +6,4 @@ noxim
 results/*
 !results/
 !results/evaluate.ipynb
+ft_verification/**/output.csv
