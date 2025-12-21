@@ -966,7 +966,12 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 				controller.endStep(channel, OUTCOME_SILENCE, 1);
 				
 				// Start new step in NEXT cycle to ensure 1-cycle duration
-				fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
+				// CRITICAL FIX: Update GLOBAL state to prevent "teleporting" token
+				// This forces the next token holder to wait until the next cycle
+				// USER REQUEST: Set to +2 to match conservative handshake of TOKEN_PACKET
+				state->step_start_cycle = current_cycle + 2;
+				fuzzyTokenStepStartCycle[channel] = current_cycle + 2;
+				
 				fuzzyTokenActiveTransmitters[channel] = 0;
 				for (auto& pair : fuzzyTokenNodes) {
 					if (pair.first == channel) {

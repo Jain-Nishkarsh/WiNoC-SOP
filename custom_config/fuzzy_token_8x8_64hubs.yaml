@@ -107,7 +107,7 @@ RadioChannels:
         fuzzy_token:
             preamble_cycles: 1
             thr1: 0.3
-            thr2: 0.6
+            thr2: 0.7
             thr_is_percentage: true
 
             initial_FA: 64
