@@ -108,25 +108,16 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
 }
 
 void FuzzyTokenChannelState::updateTransmissionProbabilities() {
-    for (int i = 0; i < numNodes; i++) {
-        transmissionProb[i] = 0.0;
-    }
+    // Reset probabilities
+    std::fill(transmissionProb.begin(), transmissionProb.end(), 0.0);
     
     if (FA_size == 0) return;
-    
-    if (config.pi_type == PI_EQUAL) {
-        double p_uniform = 1.0 / FA_size;
-        for (int i = 0; i < numNodes; i++) {
-            if (fuzzyArea.test(i)) transmissionProb[i] = p_uniform;
-        }
-    } else if (config.pi_type == PI_GAUSSIAN) {
-        // Check cache first
+
+    if (config.pi_type == PI_GAUSSIAN) {
+        // Ensure cache exists
         if (gaussian_weights_cache.find(FA_size) == gaussian_weights_cache.end()) {
-            // Compute and cache weights for this FA_size
-            vector<double> weights;
-            weights.resize(FA_size);
+            vector<double> weights(FA_size);
             const double sigma = std::max(1.0, FA_size / 2.0);
-            
             for (int k = 0; k < FA_size; ++k) {
                 const int dist = std::abs(k - FA_size/2);
                 weights[k] = std::exp(-(dist*dist) / (2.0 * sigma * sigma));
@@ -134,42 +125,42 @@ void FuzzyTokenChannelState::updateTransmissionProbabilities() {
             gaussian_weights_cache[FA_size] = weights;
         }
 
+        // Assign weights to nodes
         const vector<double>& weights = gaussian_weights_cache[FA_size];
-        int centerIdx = tokenRingPosition;
-        double sumw = 0.0;
         const int n = (int)tokenRingOrder.size();
-        
+        double total_weight = 0.0;
+
         for (int k = 0; k < FA_size && k < n; ++k) {
-            int idx = (centerIdx + k - FA_size/2 + n) % n;
+            int idx = (tokenRingPosition + k - FA_size/2 + n) % n;
             int nodeId = tokenRingOrder[idx];
-            double w = weights[k];
-            transmissionProb[nodeId] = w;
-            sumw += w;
+            
+            transmissionProb[nodeId] = weights[k];
+            total_weight += weights[k];
         }
-        
-        const double minp = std::max(0.0, config.min_transmission_prob);
-        double sumAfter = 0.0;
-        if (sumw > 0.0) {
-            const double invSum = 1.0 / sumw;
+
+        // Normalize Gaussian to sum to 1.0 initially
+        if (total_weight > 0.0) {
+            double scale = 1.0 / total_weight;
             for (int i = 0; i < numNodes; i++) {
-                if (transmissionProb[i] > 0) {
-                    transmissionProb[i] *= invSum;
-                    if (transmissionProb[i] < minp) transmissionProb[i] = minp;
-                    sumAfter += transmissionProb[i];
-                }
-            }
-        }
-        
-        if (sumAfter > 0.0) {
-            const double invSumAfter = 1.0 / sumAfter;
-            for (int i = 0; i < numNodes; i++) {
-                if (transmissionProb[i] > 0) transmissionProb[i] *= invSumAfter;
+                if (transmissionProb[i] > 0) transmissionProb[i] *= scale;
             }
         }
     } else {
+        // PI_EQUAL (default)
         double p_uniform = 1.0 / FA_size;
         for (int i = 0; i < numNodes; i++) {
-            if (transmissionProb[i] > 0) transmissionProb[i] = p_uniform;
+            if (fuzzyArea.test(i)) transmissionProb[i] = p_uniform;
+        }
+    }
+
+    // Apply Minimum Transmission Probability
+    // This ensures that even if the distribution assigns a low probability,
+    // the node transmits with at least this probability.
+    if (config.min_transmission_prob > 0.0) {
+        for (int i = 0; i < numNodes; i++) {
+            if (transmissionProb[i] > 0) {
+                transmissionProb[i] = std::max(transmissionProb[i], config.min_transmission_prob);
+            }
         }
     }
 }
@@ -404,6 +395,7 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         
         GlobalParams::csv_mac_log_stream 
             << state->step_start_cycle << ","
+            << state->channelID << ","
             << state->step_id << ","
             << outcome_str << ","
             << stepCycles << ","

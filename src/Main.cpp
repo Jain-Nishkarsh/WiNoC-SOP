@@ -68,7 +68,7 @@ int sc_main(int arg_num, char *arg_vet[])
         if (!GlobalParams::csv_mac_log_filename.empty()) {
             GlobalParams::csv_mac_log_stream.open(GlobalParams::csv_mac_log_filename.c_str());
             if (GlobalParams::csv_mac_log_stream.is_open()) {
-                GlobalParams::csv_mac_log_stream << "sim_cycle,step_id,event_type,event_duration,token_id,period_mode,fa_size,fa_center,fa_nodes,fa_update,fa_old_size,fa_new_size,tx_attempt_nodes,tx_success_node,ready_nodes,ready_in_fa_nodes,nack_sent,nack_sender" << endl;
+                GlobalParams::csv_mac_log_stream << "sim_cycle,channel_id,step_id,event_type,event_duration,token_id,period_mode,fa_size,fa_center,fa_nodes,fa_update,fa_old_size,fa_new_size,tx_attempt_nodes,tx_success_node,ready_nodes,ready_in_fa_nodes,nack_sent,nack_sender" << endl;
                 cout << "CSV MAC Log enabled: " << GlobalParams::csv_mac_log_filename << endl;
             } else {
                 cerr << "Error opening CSV MAC log file: " << GlobalParams::csv_mac_log_filename << endl;

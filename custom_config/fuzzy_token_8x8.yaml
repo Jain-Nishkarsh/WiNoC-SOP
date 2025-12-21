@@ -5,7 +5,7 @@
 topology: MESH
 mesh_dim_x: 8
 mesh_dim_y: 8
-buffer_depth: 32
+buffer_depth: 64
 flit_size: 16
 r2h_link_length: 2.0
 r2r_link_length: 1.0
@@ -51,17 +51,17 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.3
-            thr2: 0.7
+            thr1: 0.2
+            thr2: 0.5
             thr_is_percentage: true
 
-            initial_FA: 8
+            initial_FA: 1
             FA_increment: 1
-            FA_decrement_factor: 0.5
+            FA_decrement_factor: 0.4
             
             pi_type: gaussian
             
-            min_transmission_prob: 0.4
+            min_transmission_prob: 0.2
             initial_token_holder: 0
             token_order: static
 

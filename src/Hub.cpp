@@ -843,19 +843,9 @@ void Hub::sendNack(int channel)
 
 void Hub::txRadioProcessFuzzyToken(int channel)
 {
-    // cerr << "DEBUG: Hub " << local_id << " txRadioProcessFuzzyToken ch=" << channel << endl;
-	static int fuzzy_call_count = 0;
-	fuzzy_call_count++;
-	
-	if (fuzzy_call_count % 1000 == 0) {
-		cerr << "[FUZZY-PROCESS #" << fuzzy_call_count << "] Hub " << local_id 
-		     << " processing channel " << channel << endl;
-	}
-	
 	// Initialize Fuzzy Token for this channel if needed
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end())
 	{
-		cerr << "[FUZZY-INIT] Hub " << local_id << " initializing Fuzzy Token for channel " << channel << endl;
 		initializeFuzzyToken(channel);
 	}
 	
@@ -913,7 +903,9 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 
     // CONTROL MINISLOT (Cycle 0 of the step)
     if (step_duration == 0) {
-        state->perform_control_minislot(current_cycle, usePlusFeatures);
+        // Enable polling if using Plus features OR if CSV logging is enabled (for debugging)
+        bool enable_polling = usePlusFeatures || GlobalParams::csv_log_enabled;
+        state->perform_control_minislot(current_cycle, enable_polling);
         node->resetStepState();
         // Stall this cycle to allow control info to propagate/be processed
         // return; 
@@ -955,12 +947,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 				// Start transmission now (no preamble/collision phases)
 				if (!init[channel]->buffer_tx.IsEmpty()) {
 					Flit flit = init[channel]->buffer_tx.Front();
-					static int focused_tx_count = 0;
-					focused_tx_count++;
-					cerr << "[FOCUSED-TX-START #" << focused_tx_count << "] Hub " << local_id 
-					     << " starting transmission in FOCUSED mode:" << endl
-					     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
-					     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no << endl;
 					if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
 						cout << "Hub " << local_id << " (token holder) transmitting on channel "
 						     << channel << " (focused mode)" << endl;
@@ -975,12 +961,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			} else {
 				// No data to send: end step as SILENCE and advance token
 				// In FOCUSED mode, no preamble/collision overhead, so advance immediately
-				static int focused_silence_count = 0;
-				focused_silence_count++;
-				if (focused_silence_count <= 10 || focused_silence_count % 1000 == 0) {
-					cerr << "[FOCUSED-SILENCE #" << focused_silence_count << "] Token holder (Hub " << local_id
-					     << ") has no data, advancing token (SILENCE)" << endl;
-				}
 				// FOCUSED mode: immediate token advance, no silence_cycles delay
 				// FIX: User requires SILENCE duration = 1 cycle.
 				controller.endStep(channel, OUTCOME_SILENCE, 1);
@@ -1013,9 +993,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		int active_count = state->getActiveTransmitters();
 		
 		if (active_count == 0) {
-			if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-				cerr << "[FUZZY-SILENCE] Hub " << local_id << " ending step" << endl;
-			}
 			int step_cycles = state->config.preamble_cycles;
 			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
@@ -1033,11 +1010,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			if (current_cycle != last_collision_cycle) {
 				last_collision_cycle = current_cycle;
 				
-				if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-					cerr << "[COLLISION] Hub " << local_id << " detected " << active_count 
-					     << " transmitters" << endl;
-				}
-
 				int step_cycles = state->config.preamble_cycles + 1;
 				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
 				
@@ -1070,6 +1042,26 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		
 		if (mode == FUZZY_MODE)
 		{
+			// VETO: Token Holder transmits immediately if it has data
+			if (node->isTokenHolder() && hasData) {
+				if (!init[channel]->buffer_tx.IsEmpty()) {
+					// Register transmission
+					if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
+						state->registerTransmission(local_id);
+					}
+
+					Flit flit = init[channel]->buffer_tx.Front();
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+						cout << "Hub " << local_id << " (token holder) VETO transmitting on channel "
+						     << channel << " (FUZZY mode)" << endl;
+					}
+
+					fuzzyTokenTransmissionThisStep[channel] = true;
+					init[channel]->start_request_event.notify();
+				}
+				return; // Skip preamble phases
+			}
+
 			// PAPER-CORRECT: Fuzzy Token Protocol Phases
 			// Per paper: Token holder CANNOT transmit in FUZZY mode (only listens and sends NACK)
 			// Phase 1 (Preamble): Non-holder nodes in FA send preambles
@@ -1083,9 +1075,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 				
 				// Register transmission with global controller (broadcast model)
 				state->registerTransmission(local_id);
-				
-				cerr << "[PREAMBLE-SENT] Hub " << local_id << " sent preamble on channel " << channel 
-				     << " (step start: " << fuzzyTokenStepStartCycle[channel] << ", current: " << current_cycle << ")" << endl;
 				
 				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
 				{
@@ -1110,8 +1099,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			// Check if collision was detected this step
 			// If activeTransmitters > 1, collision was detected by token holder
 			if (state->getActiveTransmitters() > 1) {
-				cerr << "[TX-ABORTED] Hub " << local_id << " aborting - collision detected ("
-				     << state->getActiveTransmitters() << " transmitters), all hubs hold" << endl;
 				return;
 			}
 			
@@ -1120,16 +1107,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			{
 				Flit flit = init[channel]->buffer_tx.Front();
 				
-				static int fuzzy_tx_count = 0;
 				if (!transmission_in_progress.at(channel)) {
 					// First flit of packet
-					fuzzy_tx_count++;
-					cerr << "[FUZZY-TX-START #" << fuzzy_tx_count << "] Hub " << local_id 
-					     << " starting packet transmission in FUZZY mode (after collision check):" << endl
-					     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
-					     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no 
-					     << ", active_transmitters=" << state->getActiveTransmitters() << endl;
-					
 					// Mark that transmission started in this step
 					fuzzyTokenTransmissionThisStep[channel] = true;
 				}
@@ -1148,33 +1127,62 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		}
 		else // FOCUSED_MODE
 		{
-		// In focused mode, only token holder transmits (no preamble needed)
-		// Note: Similar to TOKEN_PACKET, keep calling notify() for each flit until packet completes
-		if (node->isTokenHolder() && hasData)
-		{
-			if (!init[channel]->buffer_tx.IsEmpty())
+			// In focused mode, token holder transmits immediately (no preamble needed)
+			// Neighbors can transmit if channel is not busy (CSMA-like)
+
+			bool is_busy = (state->getActiveTransmitters() > 0);
+
+			if (node->isTokenHolder() && hasData)
 			{
-				Flit flit = init[channel]->buffer_tx.Front();			static int focused_tx_count = 0;
-			focused_tx_count++;
-			cerr << "[FOCUSED-TX-START #" << focused_tx_count << "] Hub " << local_id 
-			     << " starting transmission in FOCUSED mode:" << endl
-			     << "    src=" << flit.src_id << ", dst=" << flit.dst_id 
-			     << ", type=" << flit.flit_type << ", seq=" << flit.sequence_no << endl;				if (GlobalParams::verbose_mode == VERBOSE_HIGH)
+				// Token Holder transmits WITHOUT checking isBusy
+				if (!init[channel]->buffer_tx.IsEmpty())
 				{
-					cout << "Hub " << local_id << " (token holder) transmitting on channel "
-					     << channel << " (focused mode)" << endl;
+					// Register transmission so neighbors see it as busy
+					if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
+						state->registerTransmission(local_id);
+					}
+
+					Flit flit = init[channel]->buffer_tx.Front();
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH)
+					{
+						cout << "Hub " << local_id << " (token holder) transmitting on channel "
+							 << channel << " (focused mode)" << endl;
+					}
+					
+					// OPTION 2: Mark that transmission started in this step
+					// The step will end when TAIL flit is sent (in Initiator)
+					fuzzyTokenTransmissionThisStep[channel] = true;
+					
+					init[channel]->start_request_event.notify();
+					
+					// NOTE: endStep() is called in Initiator when transmission completes (TAIL sent)
+					// NOT here, because transmission is asynchronous
 				}
-				
-				// OPTION 2: Mark that transmission started in this step
-				// The step will end when TAIL flit is sent (in Initiator)
-				fuzzyTokenTransmissionThisStep[channel] = true;
-				
-				init[channel]->start_request_event.notify();
-				
-				// NOTE: endStep() is called in Initiator when transmission completes (TAIL sent)
-				// NOT here, because transmission is asynchronous
 			}
-		}
+			else if (!node->isTokenHolder() && hasData)
+			{
+				// Neighbors MUST check isBusy
+				if (!is_busy)
+				{
+					if (!init[channel]->buffer_tx.IsEmpty())
+					{
+						// Register transmission
+						if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
+							state->registerTransmission(local_id);
+						}
+
+						Flit flit = init[channel]->buffer_tx.Front();
+						if (GlobalParams::verbose_mode == VERBOSE_HIGH)
+						{
+							cout << "Hub " << local_id << " (neighbor) transmitting on channel "
+								 << channel << " (focused mode)" << endl;
+						}
+						
+						fuzzyTokenTransmissionThisStep[channel] = true;
+						init[channel]->start_request_event.notify();
+					}
+				}
+			}
 		}
 	}
 	else
@@ -1210,16 +1218,18 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 	int step_start = fuzzyTokenStepStartCycle[channel];
 	int transmission_cycles = current_cycle - step_start;
 	
+	// Ensure this hub is registered as a transmitter (for logging purposes)
+	// This handles 1-flit packets where txRadioProcessFuzzyToken might not have run
+	if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
+		state->registerTransmission(local_id);
+	}
+
 	// Transmission completed; apply deferred congestion if any
 	if (fuzzyTokenDeferredCongestion[channel]) {
 		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles);
-		cerr << "[FUZZY-STEP-END] Channel " << channel 
-		     << " transmission complete with deferred CONGESTION, FA_size will decrease" << endl;
 		fuzzyTokenDeferredCongestion[channel] = false; // consume the deferred flag
 	} else {
 		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
-		cerr << "[FUZZY-STEP-END] Channel " << channel 
-		     << " transmission complete (SUCCESS), step ended, token advanced" << endl;
 	}
 	
 	// Reset step state for next transmission
@@ -1274,9 +1284,6 @@ void Hub::handleFuzzyTokenCollision(int channel)
 	fuzzyTokenActiveTransmitters[channel] = 0;
 	fuzzyTokenStepStartCycle[channel] = current_cycle + 1; // Start new step
 	fuzzyTokenTransmissionThisStep[channel] = false;
-	
-	cerr << "[FUZZY-COLLISION-END] Channel " << channel 
-	     << " TX-ERROR detected (COLLISION), FA_size will decrease multiplicatively" << endl;
 }
 
 // Handle buffer overflow (receiver-side congestion, not a true MAC collision)
@@ -1309,9 +1316,6 @@ void Hub::handleBufferOverflow(int channel) {
 	fuzzyTokenActiveTransmitters[channel] = 0;
 	fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
 	fuzzyTokenTransmissionThisStep[channel] = false;
-	
-    cerr << "[BUFFER-OVERFLOW-END] Channel " << channel 
-	    << " buffer overflow detected (NOT MAC collision) - treating as CONGESTION (AIMD decrease)" << endl;
 }
 
 // Handle TX-side congestion: enqueue-full when a new packet arrives
@@ -1332,8 +1336,6 @@ void Hub::handleFuzzyTokenCongestion(int channel)
 	// Defer congestion handling to end of current/next transmission step
 	if (!fuzzyTokenDeferredCongestion[channel]) {
 		fuzzyTokenDeferredCongestion[channel] = true; // coalesce multiple events into one
-		cerr << "[FUZZY-CONGESTION-DEFER] Channel " << channel
-		     << " HEAD enqueue-full detected; deferring FA decrease until step end" << endl;
 	} else {
 		// Already deferred for this step; nothing to do
 	}
