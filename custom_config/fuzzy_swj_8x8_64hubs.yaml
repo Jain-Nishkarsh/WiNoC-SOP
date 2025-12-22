@@ -103,7 +103,7 @@ RadioChannels:
     defaults:
         data_rate: 16
         ber: [0, 0]
-        mac_policy: [FUZZY_TOKEN]
+        mac_policy: [FUZZY_SWJ]
         fuzzy_token:
             preamble_cycles: 1
             thr1: 0.3
@@ -122,12 +122,12 @@ RadioChannels:
 
 clock_period_ps: 1000
 reset_time: 100
-simulation_time: 5000
-stats_warm_up_time: 100
+simulation_time: 10000
+stats_warm_up_time: 1000
 
 min_packet_size: 3
 max_packet_size: 3
-packet_injection_rate: 0.01
+packet_injection_rate: 0.004
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
@@ -143,6 +143,6 @@ max_volume_to_be_drained: 0
 show_buffer_stats: false
 
 # CSV Logging
-csv_log_enabled: false
+csv_log_enabled: true
 csv_routing_log_filename: ""
-csv_mac_log_filename: "fuzzy_test.csv"
+csv_mac_log_filename: "fuzzy_test_swj.csv"

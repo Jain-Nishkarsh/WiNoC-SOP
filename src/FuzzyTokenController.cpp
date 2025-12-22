@@ -66,6 +66,19 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         cout << "FuzzyTokenChannelState initialized: numNodes=" << numNodes 
              << ", FA_size=" << FA_size << ", tokenID=" << tokenID << endl;
     }
+
+    // Initialize SHT
+    for(int i=0; i<64; i++) {
+        sht[i].success_count = 0;
+        sht[i].last_visit_cycle = 0;
+    }
+    last_smoothing_cycle = 0;
+    
+    // Initialize SWJ debug metrics
+    last_swj_score = 0.0;
+    last_swj_success = 0;
+    last_swj_age = 0;
+    last_swj_target = -1;
 }
 
 void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
@@ -79,9 +92,6 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             break;
             
         case OUTCOME_CONGESTION:
-            // FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
-            // if (FA_size < 1) FA_size = 1;
-            // else totalCongestions++;
             totalCongestions++;
             break;
             
@@ -210,6 +220,122 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     updateTransmissionProbabilities();
 }
 
+void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id) {
+    // Silence Penalty for FUZZY_SWJ
+    if ((outcome == OUTCOME_SILENCE || outcome == OUTCOME_CONGESTION) && macPolicy == FUZZY_SWJ) {
+        if (tokenID >= 0 && tokenID < 64) {
+            sht[tokenID].success_count = (uint16_t)(sht[tokenID].success_count * 0.5);
+        }
+    }
+
+    // Phase 1: Global Observation
+    if (outcome == OUTCOME_SUCCESS && source_id >= 0 && source_id < 64) {
+        sht[source_id].success_count++;
+    }
+
+    // Smoothing: Multiply all success_count by 0.9 every 1000 cycles
+    if (step_start_cycle - last_smoothing_cycle >= 1000) {
+        for(int i=0; i<64; i++) {
+            sht[i].success_count = (uint16_t)(sht[i].success_count * 0.9);
+        }
+        last_smoothing_cycle = step_start_cycle;
+        
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+            cout << "[SHT-SMOOTHING] Applied decay at cycle " << step_start_cycle << endl;
+        }
+    }
+}
+
+void FuzzyTokenChannelState::advanceTokenSWJ() {
+    // Phase 2: The Heuristic Score & Jump Target
+    
+    // Current cycle T
+    uint64_t T = step_start_cycle + currentStepCycles;
+
+    // Update last_visit_cycle for the current token holder
+    if (tokenID >= 0 && tokenID < 64) {
+        sht[tokenID].last_visit_cycle = T;
+    }
+
+    // Weights
+    double alpha = 10;
+    double beta = 0.05;
+
+    // 1. Calculate Score for Sequential Neighbor (Baseline)
+    int next_seq_idx = (tokenRingPosition + 1) % tokenRingOrder.size();
+    int seq_node = tokenRingOrder[next_seq_idx];
+    double seq_exploitation = (double)sht[seq_node].success_count;
+    uint64_t seq_age = (T > sht[seq_node].last_visit_cycle) ? (T - sht[seq_node].last_visit_cycle) : 0;
+    double seq_exploration = (double)seq_age;
+    double seq_score = alpha * seq_exploitation + beta * seq_exploration;
+
+    double max_score = -1.0;
+    int best_node = -1;
+
+    for (int i = 0; i < numNodes; i++) {
+        int nodeId = tokenRingOrder[i];
+        if (nodeId >= 64) continue; // SHT is size 64
+        
+        double exploitation = (double)sht[nodeId].success_count;
+        uint64_t age = (T > sht[nodeId].last_visit_cycle) ? (T - sht[nodeId].last_visit_cycle) : 0;
+        double exploration = (double)age;
+        
+        double score = alpha * exploitation + beta * exploration;
+        
+        if (score > max_score) {
+            max_score = score;
+            best_node = nodeId;
+        } else if (score == max_score) {
+            // Tie-Breaking: lowest ID
+            if (best_node == -1 || nodeId < best_node) {
+                best_node = nodeId;
+            }
+        }
+    }
+    
+    // 2. Apply Hysteresis (10% Rule)
+    // If the best node is not significantly better than the sequential neighbor, stick to sequential
+    if (max_score <= 1.1 * seq_score) {
+        best_node = seq_node;
+        max_score = seq_score;
+    }
+    
+    // Store debug metrics
+    last_swj_score = max_score;
+    last_swj_target = best_node;
+    if (best_node != -1) {
+        last_swj_success = sht[best_node].success_count;
+        last_swj_age = (T > sht[best_node].last_visit_cycle) ? (T - sht[best_node].last_visit_cycle) : 0;
+    } else {
+        last_swj_success = 0;
+        last_swj_age = 0;
+    }
+    
+    int oldTokenID = tokenID;
+    
+    if (best_node != -1) {
+        // Find position of best_node in tokenRingOrder
+        for(int i=0; i<tokenRingOrder.size(); ++i) {
+            if (tokenRingOrder[i] == best_node) {
+                tokenRingPosition = i;
+                break;
+            }
+        }
+        tokenID = best_node;
+    } else {
+        // Fallback
+        tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
+        tokenID = tokenRingOrder[tokenRingPosition];
+    }
+    
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldTokenID != tokenID) {
+        cout << "[SWJ-JUMP] " << oldTokenID << " -> " << tokenID << " (Score: " << max_score << ")" << endl;
+    }
+    
+    rebuildFuzzyArea();
+    updateTransmissionProbabilities();
+}
+
 void FuzzyTokenChannelState::switchMode(StepOutcome outcome) {
     double thr1_value = config.thr_is_percentage ? ceil(config.thr1 * numNodes) : config.thr1;
     double thr2_value = config.thr_is_percentage ? floor(config.thr2 * numNodes) : config.thr2;
@@ -324,22 +450,19 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     
     // 1. Capture Pre-Update State
     int fa_old_size = state->FA_size;
+    int current_holder = state->tokenID;
+    FuzzyTokenMode mode_before_update = state->periodMode;
     
     // Construct Node Lists (FA and Ready) BEFORE update
     stringstream fa_nodes_ss;
-    bool first = true;
     for(int i=0; i<state->numNodes; ++i) {
-        if(state->isInFuzzyArea(i)) {
-            if(!first) fa_nodes_ss << "|";
-            fa_nodes_ss << i;
-            first = false;
-        }
+        fa_nodes_ss << (state->isInFuzzyArea(i) ? "1" : "0");
     }
     string fa_nodes = fa_nodes_ss.str();
     if (fa_nodes.empty()) fa_nodes = "-";
 
     stringstream tx_attempt_ss;
-    first = true;
+    bool first = true;
     int success_node = -1;
     for(int node : state->transmittingHubsThisStep) {
         if(!first) tx_attempt_ss << "|";
@@ -351,70 +474,15 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     if (tx_attempt_nodes.empty()) tx_attempt_nodes = "-";
 
     stringstream ready_nodes_ss;
-    stringstream ready_in_fa_ss;
-    first = true;
-    bool first_fa = true;
     for(int i=0; i<state->numNodes; ++i) {
-        if(state->isHubReady(i)) {
-            if(!first) ready_nodes_ss << "|";
-            ready_nodes_ss << i;
-            first = false;
-
-            if(state->isInFuzzyArea(i)) {
-                if(!first_fa) ready_in_fa_ss << "|";
-                ready_in_fa_ss << i;
-                first_fa = false;
-            }
-        }
+        ready_nodes_ss << (state->isHubReady(i) ? "1" : "0");
     }
     string ready_nodes = ready_nodes_ss.str();
     if (ready_nodes.empty()) ready_nodes = "-";
-    string ready_in_fa_nodes = ready_in_fa_ss.str();
-    if (ready_in_fa_nodes.empty()) ready_in_fa_nodes = "-";
 
     // 2. Update State
     // Always update FA_size to track contention (needed for baseline FUZZY_TOKEN mode switching)
     state->updateFuzzyArea(outcome);
-    int fa_new_size = state->FA_size;
-
-    // 3. Determine Update Type
-    string fa_update = "NONE";
-    if (fa_new_size > fa_old_size) fa_update = "INC";
-    else if (fa_new_size < fa_old_size) fa_update = "DEC";
-
-    // 4. NACK Logic
-    int nack_sent = (outcome == OUTCOME_COLLISION) ? 1 : 0;
-    int nack_sender = (outcome == OUTCOME_COLLISION) ? state->tokenID : -1;
-
-    // 5. Log to CSV
-    if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
-        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
-                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
-                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
-        const char* mode_str = (state->periodMode == FUZZY_MODE) ? "FUZZY" : "FOCUSED";
-        
-        GlobalParams::csv_mac_log_stream 
-            << state->step_start_cycle << ","
-            << state->channelID << ","
-            << state->step_id << ","
-            << outcome_str << ","
-            << stepCycles << ","
-            << state->tokenID << ","
-            << mode_str << ","
-            << fa_old_size << ","
-            << state->tokenID << ","
-            << fa_nodes << ","
-            << fa_update << ","
-            << fa_old_size << ","
-            << fa_new_size << ","
-            << tx_attempt_nodes << ","
-            << success_node << ","
-            << ready_nodes << ","
-            << ready_in_fa_nodes << ","
-            << nack_sent << ","
-            << nack_sender
-            << endl;
-    }
     
     // Increment Step ID
     state->step_id++;
@@ -429,23 +497,62 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         state->totalFocusedSteps++;
     }
     
+    // Update currentStepCycles BEFORE SWJ logic to ensure correct age calculation
+    state->currentStepCycles = stepCycles;
+
     bool useJumpFeatures = (state->macPolicy == FUZZY_RAJ);
     bool usePlusFeatures = (state->macPolicy == FUZZY_RCT || state->macPolicy == FUZZY_RAJ);
+    bool useSWJ = (state->macPolicy == FUZZY_SWJ);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
-    if (useJumpFeatures && inFocusedMode) {
+    if (useSWJ) {
+        int success_node_for_sht = -1;
+        if (outcome == OUTCOME_SUCCESS) {
+             if (state->transmittingHubsThisStep.size() == 1) {
+                 success_node_for_sht = *state->transmittingHubsThisStep.begin();
+             }
+        }
+        state->updateSHT(outcome, success_node_for_sht);
+        state->advanceTokenSWJ();
+        state->switchMode(outcome);
+    } else if (useJumpFeatures && inFocusedMode) {
         state->advanceTokenSmart();
     } else {
         state->advanceToken();
     }
     
-    if (!usePlusFeatures) {
+    if (!usePlusFeatures && !useSWJ) {
         state->switchMode(outcome);
+    }
+
+    // 3. Log to CSV (Moved to end to capture next token state)
+    if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
+        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
+                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+        const char* mode_str = (mode_before_update == FUZZY_MODE) ? "FUZZY" : "FOCUSED";
+        
+        GlobalParams::csv_mac_log_stream 
+            << state->step_start_cycle << ","
+            << state->step_id - 1 << "," // Use previous step ID as we incremented it
+            << outcome_str << ","
+            << stepCycles << ","
+            << current_holder << ","
+            << mode_str << ","
+            << fa_old_size << ","
+            << fa_nodes << ","
+            << tx_attempt_nodes << ","
+            << success_node << ","
+            << ready_nodes << ","
+            << state->last_swj_target << ","
+            << state->last_swj_score << ","
+            << state->last_swj_success << ","
+            << state->last_swj_age
+            << endl;
     }
     
     state->resetStepState();
     state->resetReadyBitmap();
-    state->currentStepCycles = stepCycles;
 }
 
 void FuzzyTokenChannelState::rebuildFuzzyArea() {
@@ -533,11 +640,6 @@ void FuzzyTokenChannelState::resetStepState() {
 // Ready bitmap management implementations
 void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
     cerr << "ERROR: setHubReady called outside control minislot! This function is deprecated." << endl;
-    /*
-    if (hubId >= 0 && hubId < numNodes) {
-        ready_bitmap[hubId] = isReady;
-    }
-    */
 }
 
 bool FuzzyTokenChannelState::isHubReady(int hubId) const {

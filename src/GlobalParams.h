@@ -93,6 +93,7 @@ using namespace std;
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
 #define FUZZY_RCT              "FUZZY_RCT"
 #define FUZZY_RAJ              "FUZZY_RAJ"
+#define FUZZY_SWJ              "FUZZY_SWJ"
 
 enum ProbabilityDistribution {
     PI_EQUAL,

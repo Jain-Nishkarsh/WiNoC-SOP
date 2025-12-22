@@ -207,10 +207,8 @@ void Hub::txRadioProcessTokenHold(int channel)
 	{
 		if (!init[channel]->buffer_tx.IsEmpty())
 		{
-			//LOG << "Token holder for channel " << channel << " with not empty buffer_tx" << endl;
 			if (current_token_expiration[channel]->read() < flit_transmission_cycles[channel])
 			{
-				//LOG << "TOKEN_HOLD policy: Not enough token expiration time for sending channel " << channel << endl;
 			}
 			else
 			{
@@ -218,10 +216,6 @@ void Hub::txRadioProcessTokenHold(int channel)
 				LOG << "*** [Ch" << channel << "] Starting transmission event" << endl;
 				init[channel]->start_request_event.notify();
 			}
-		}
-		else
-		{
-			//LOG << "TOKEN_HOLD policy: nothing to transmit, holding token for channel " << channel << endl;
 		}
 	}
 }
@@ -235,11 +229,9 @@ void Hub::txRadioProcessTokenMaxHold(int channel)
 	{
 		if (!init[channel]->buffer_tx.IsEmpty())
 		{
-			//LOG << "Token holder for channel " << channel << " with not empty buffer_tx" << endl;
 
 			if (current_token_expiration[channel]->read() < flit_transmission_cycles[channel])
 			{
-				//LOG << "TOKEN_MAX_HOLD: Not enough token expiration time, releasing token for channel " << channel << endl;
 				flag[channel]->write(RELEASE_CHANNEL);
 			}
 			else
@@ -251,7 +243,6 @@ void Hub::txRadioProcessTokenMaxHold(int channel)
 		}
 		else
 		{
-			//LOG << "TOKEN_MAX_HOLD: Buffer_tx empty, releasing token for channel " << channel << endl;
 			flag[channel]->write(RELEASE_CHANNEL);
 		}
 	}
@@ -448,10 +439,6 @@ void Hub::antennaToTileProcess()
 			else
 			{
 				// should be ok
-				/*
-                LOG << "WARNING: empty target["<<channel<<"] buffer_rx, but reservation still present, if correct, remove assertion below " << endl;
-                assert(false);
-                */
 			}
 		}
 	}
@@ -459,19 +446,6 @@ void Hub::antennaToTileProcess()
 
 void Hub::tileToAntennaProcess()
 {
-	// double cycle = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-	// if (cycle > 0 && cycle < 58428)
-	// {
-	//     if (local_id == 1)
-	//     {
-	//         cout << "CYCLES " << cycle << endl;
-	//         for (int j = 0; j < num_ports; j++)
-	//     	buffer_from_tile[j].Print();;
-	//         init[0]->buffer_tx.Print();
-	//         cout << endl;
-	//     }
-	// }
-
 	if (reset.read())
 	{
 		for (unsigned int i =0 ;i<txChannels.size();i++)
@@ -502,7 +476,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ || macPolicy == FUZZY_SWJ)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -663,14 +637,6 @@ void Hub::tileToAntennaProcess()
 			Flit received_flit = flit_rx[i]->read();
 			int vc = received_flit.vc_id;
 			LOG << "Reading " << received_flit << " from signal flit_rx[" << i << "]" << endl;
-
-			/*
-            if (!buffer_from_tile[i][vc].deadlockFree())
-            {
-            LOG << " deadlock on buffer " << i << endl;
-            buffer_from_tile[i][vc].Print();
-            }
-            */
 
 			if (!buffer_from_tile[i][vc].IsFull())
 			{
@@ -850,10 +816,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	}
 	
 	FuzzyTokenNode* node = fuzzyTokenNodes[channel];
-    // cerr << "DEBUG: Hub " << local_id << " node=" << node << endl;
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
 	FuzzyTokenChannelState* state = controller.getChannelState(channel);
-    // cerr << "DEBUG: Hub " << local_id << " state=" << state << endl;
 	
 	// NULL CHECK FIRST - return early if state not initialized yet
 	if (!state)
@@ -867,14 +831,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
     state->registerHub(this);
 
     int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
-
-	// Track step phases
-	/* 
-	if (fuzzyTokenTransmissionThisStep[channel]) {
-		fuzzyTokenStepStartCycle[channel] = current_cycle;
-		fuzzyTokenTransmissionThisStep[channel] = false;
-	}
-	*/
 
     // Synchronize with global step cycle (driven by Token Holder)
     if (state->step_start_cycle > fuzzyTokenStepStartCycle[channel]) {
@@ -907,8 +863,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
         bool enable_polling = usePlusFeatures || GlobalParams::csv_log_enabled;
         state->perform_control_minislot(current_cycle, enable_polling);
         node->resetStepState();
-        // Stall this cycle to allow control info to propagate/be processed
-        // return; 
     }
 
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
@@ -927,7 +881,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// PAPER-CORRECT: Synchronous step coordination
 	// Steps end after: 1 cycle (silence), 2 cycles (collision), C cycles (success)
 	// Only token holder coordinates step end to ensure ALL nodes register preambles first
-	// int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps); // Already declared above
 	
 	
 	// Determine if we have data early (used by focused-mode fast path)
@@ -1164,30 +1117,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					// NOT here, because transmission is asynchronous
 				}
 			}
-			else if (!node->isTokenHolder() && hasData)
-			{
-				// Neighbors MUST check isBusy
-				if (!is_busy)
-				{
-					if (!init[channel]->buffer_tx.IsEmpty())
-					{
-						// Register transmission
-						if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
-							state->registerTransmission(local_id);
-						}
-
-						Flit flit = init[channel]->buffer_tx.Front();
-						if (GlobalParams::verbose_mode == VERBOSE_HIGH)
-						{
-							cout << "Hub " << local_id << " (neighbor) transmitting on channel "
-								 << channel << " (focused mode)" << endl;
-						}
-						
-						fuzzyTokenTransmissionThisStep[channel] = true;
-						init[channel]->start_request_event.notify();
-					}
-				}
-			}
+			// FIX: In FOCUSED mode, ONLY the token holder is allowed to transmit.
+			// The previous CSMA-like logic for neighbors caused collisions.
 		}
 	}
 	else

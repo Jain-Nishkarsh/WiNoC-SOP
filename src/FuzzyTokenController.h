@@ -38,6 +38,11 @@ enum StepOutcome {
     OUTCOME_CONGESTION
 };
 
+struct HistoryEntry {
+    uint16_t success_count;    // Recent SUCCESS outcomes (Exploitation)
+    uint64_t last_visit_cycle; // Cycle when this node last held the token (Exploration)
+};
+
 struct Hub;
 
 class FuzzyTokenChannelState {
@@ -161,6 +166,19 @@ public:
     // Ready-aware jump
     int findNextReadyToken(int startPos) const;
     void advanceTokenSmart();
+
+    // SWJ (Success-Weighted Jump)
+    HistoryEntry sht[64];
+    int last_smoothing_cycle;
+    
+    // Debug metrics for SWJ
+    double last_swj_score;
+    uint16_t last_swj_success;
+    uint64_t last_swj_age;
+    int last_swj_target;
+
+    void updateSHT(StepOutcome outcome, int source_id);
+    void advanceTokenSWJ();
 };
 
 // Global Fuzzy Token Controller (manages all channels)
