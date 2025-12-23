@@ -69,14 +69,14 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
 
     // Initialize SHT
     for(int i=0; i<64; i++) {
-        sht[i].success_count = 0;
+        sht[i].success_score = 0.0;
         sht[i].last_visit_cycle = 0;
     }
     last_smoothing_cycle = 0;
     
     // Initialize SWJ debug metrics
     last_swj_score = 0.0;
-    last_swj_success = 0;
+    last_swj_success = 0.0;
     last_swj_age = 0;
     last_swj_target = -1;
 }
@@ -221,28 +221,17 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
 }
 
 void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id) {
-    // Silence Penalty for FUZZY_SWJ
-    if ((outcome == OUTCOME_SILENCE || outcome == OUTCOME_CONGESTION) && macPolicy == FUZZY_SWJ) {
-        if (tokenID >= 0 && tokenID < 64) {
-            sht[tokenID].success_count = (uint16_t)(sht[tokenID].success_count * 0.5);
-        }
-    }
-
-    // Phase 1: Global Observation
-    if (outcome == OUTCOME_SUCCESS && source_id >= 0 && source_id < 64) {
-        sht[source_id].success_count++;
-    }
-
-    // Smoothing: Multiply all success_count by 0.9 every 1000 cycles
-    if (step_start_cycle - last_smoothing_cycle >= 1000) {
-        for(int i=0; i<64; i++) {
-            sht[i].success_count = (uint16_t)(sht[i].success_count * 0.9);
-        }
-        last_smoothing_cycle = step_start_cycle;
+    for (int i = 0; i < 64; i++) {
+        // Global Decay: Everyone loses 10% of their history every step
+        sht[i].success_score *= 0.9; 
         
-        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-            cout << "[SHT-SMOOTHING] Applied decay at cycle " << step_start_cycle << endl;
+        // Reward: Only the node that actually moved data gets the +1.0
+        if (outcome == OUTCOME_SUCCESS && i == source_id) {
+            sht[i].success_score += 1.0; 
         }
+        
+        // Safety: If the score is tiny, just set to 0 to save computation
+        if (sht[i].success_score < 0.001) sht[i].success_score = 0;
     }
 }
 
@@ -259,12 +248,12 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
 
     // Weights
     double alpha = 10;
-    double beta = 0.05;
+    double beta = 0.1;
 
     // 1. Calculate Score for Sequential Neighbor (Baseline)
     int next_seq_idx = (tokenRingPosition + 1) % tokenRingOrder.size();
     int seq_node = tokenRingOrder[next_seq_idx];
-    double seq_exploitation = (double)sht[seq_node].success_count;
+    double seq_exploitation = sht[seq_node].success_score;
     uint64_t seq_age = (T > sht[seq_node].last_visit_cycle) ? (T - sht[seq_node].last_visit_cycle) : 0;
     double seq_exploration = (double)seq_age;
     double seq_score = alpha * seq_exploitation + beta * seq_exploration;
@@ -276,7 +265,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         int nodeId = tokenRingOrder[i];
         if (nodeId >= 64) continue; // SHT is size 64
         
-        double exploitation = (double)sht[nodeId].success_count;
+        double exploitation = sht[nodeId].success_score;
         uint64_t age = (T > sht[nodeId].last_visit_cycle) ? (T - sht[nodeId].last_visit_cycle) : 0;
         double exploration = (double)age;
         
@@ -295,19 +284,20 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     
     // 2. Apply Hysteresis (10% Rule)
     // If the best node is not significantly better than the sequential neighbor, stick to sequential
-    if (max_score <= 1.1 * seq_score) {
-        best_node = seq_node;
-        max_score = seq_score;
-    }
+    // Only check hysteresis if we are actually jumping (target != sequential)
+    // if (best_node != seq_node && max_score <= 1.1 * seq_score) {
+    //     best_node = seq_node;
+    //     max_score = seq_score;
+    // }
     
     // Store debug metrics
     last_swj_score = max_score;
     last_swj_target = best_node;
     if (best_node != -1) {
-        last_swj_success = sht[best_node].success_count;
+        last_swj_success = sht[best_node].success_score;
         last_swj_age = (T > sht[best_node].last_visit_cycle) ? (T - sht[best_node].last_visit_cycle) : 0;
     } else {
-        last_swj_success = 0;
+        last_swj_success = 0.0;
         last_swj_age = 0;
     }
     

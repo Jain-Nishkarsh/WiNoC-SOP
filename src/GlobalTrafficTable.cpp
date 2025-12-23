@@ -9,6 +9,7 @@
  */
 
 #include "GlobalTrafficTable.h"
+#include <iostream>
 
 GlobalTrafficTable::GlobalTrafficTable()
 {
@@ -89,6 +90,8 @@ bool GlobalTrafficTable::load(const char *fname)
       }
     }
   }
+
+  cout << "Loading traffic table from " << fname << "... " << traffic_table.size() << " entries loaded." << endl;
 
   return true;
 }

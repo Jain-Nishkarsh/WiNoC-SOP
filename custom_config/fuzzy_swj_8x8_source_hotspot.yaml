@@ -128,10 +128,10 @@ stats_warm_up_time: 1000
 
 min_packet_size: 3
 max_packet_size: 3
-packet_injection_rate: 0.004
+packet_injection_rate: 0.00001
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_TABLE_BASED
-traffic_table_filename: "traffic_tables/source_hotspot_40pct.txt"
+traffic_table_filename: "traffic_tables/sparse_dual_hotspot.txt"
 
 use_winoc: true
 use_wirxsleep: false

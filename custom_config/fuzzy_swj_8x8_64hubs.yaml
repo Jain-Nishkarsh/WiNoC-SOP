@@ -127,7 +127,7 @@ stats_warm_up_time: 1000
 
 min_packet_size: 3
 max_packet_size: 3
-packet_injection_rate: 0.004
+packet_injection_rate: 0.005
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
