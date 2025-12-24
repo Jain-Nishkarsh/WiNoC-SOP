@@ -39,7 +39,7 @@ enum StepOutcome {
 };
 
 struct HistoryEntry {
-    uint16_t success_count;    // Recent SUCCESS outcomes (Exploitation)
+    double success_score;      // EMA of SUCCESS outcomes (Exploitation)
     uint64_t last_visit_cycle; // Cycle when this node last held the token (Exploration)
 };
 
@@ -173,7 +173,7 @@ public:
     
     // Debug metrics for SWJ
     double last_swj_score;
-    uint16_t last_swj_success;
+    double last_swj_success;
     uint64_t last_swj_age;
     int last_swj_target;
 

@@ -248,15 +248,15 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
 
     // Weights
     double alpha = 10;
-    double beta = 0.1;
+    double Wa = 0.1; // Weight for age (logarithmic)
 
     // 1. Calculate Score for Sequential Neighbor (Baseline)
     int next_seq_idx = (tokenRingPosition + 1) % tokenRingOrder.size();
     int seq_node = tokenRingOrder[next_seq_idx];
     double seq_exploitation = sht[seq_node].success_score;
     uint64_t seq_age = (T > sht[seq_node].last_visit_cycle) ? (T - sht[seq_node].last_visit_cycle) : 0;
-    double seq_exploration = (double)seq_age;
-    double seq_score = alpha * seq_exploitation + beta * seq_exploration;
+    double seq_exploration = Wa * std::log((double)seq_age + 1.0);
+    double seq_score = alpha * seq_exploitation + seq_exploration;
 
     double max_score = -1.0;
     int best_node = -1;
@@ -267,9 +267,9 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         
         double exploitation = sht[nodeId].success_score;
         uint64_t age = (T > sht[nodeId].last_visit_cycle) ? (T - sht[nodeId].last_visit_cycle) : 0;
-        double exploration = (double)age;
+        double exploration = Wa * std::log((double)age + 1.0);
         
-        double score = alpha * exploitation + beta * exploration;
+        double score = alpha * exploitation + exploration;
         
         if (score > max_score) {
             max_score = score;
@@ -548,13 +548,39 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
 void FuzzyTokenChannelState::rebuildFuzzyArea() {
     fuzzyArea.reset();
     if (numNodes <= 0 || tokenRingOrder.empty()) return;
-    int n = (int)tokenRingOrder.size();
-    int center = tokenRingPosition;
-    int half = FA_size / 2;
-    for (int k = -half; k < -half + FA_size; ++k) {
-        int idx = (center + k + n) % n;
-        int nodeId = tokenRingOrder[idx];
-        fuzzyArea.set(nodeId);
+
+    if (macPolicy == FUZZY_SWJ) {
+        // Blob FA Logic (Manhattan Distance)
+        int dimX = GlobalParams::mesh_dim_x;
+        // int dimY = GlobalParams::mesh_dim_y; // Unused
+        
+        int x_token = tokenID % dimX;
+        int y_token = tokenID / dimX;
+        
+        // Calculate radius based on FA_size (Area ~ 2*r^2)
+        // r = sqrt(FA_size / 2)
+        int radius = (int)std::sqrt(FA_size / 2.0);
+        
+        for (int i = 0; i < numNodes; i++) {
+            int x_i = i % dimX;
+            int y_i = i / dimX;
+            
+            int dist = std::abs(x_token - x_i) + std::abs(y_token - y_i);
+            
+            if (dist <= radius) {
+                fuzzyArea.set(i);
+            }
+        }
+    } else {
+        // Original Ring Logic
+        int n = (int)tokenRingOrder.size();
+        int center = tokenRingPosition;
+        int half = FA_size / 2;
+        for (int k = -half; k < -half + FA_size; ++k) {
+            int idx = (center + k + n) % n;
+            int nodeId = tokenRingOrder[idx];
+            fuzzyArea.set(nodeId);
+        }
     }
 }
 

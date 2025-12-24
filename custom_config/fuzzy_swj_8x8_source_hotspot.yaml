@@ -111,7 +111,7 @@ RadioChannels:
             thr2: 0.7
             thr_is_percentage: true
 
-            initial_FA: 64
+            initial_FA: 8
             FA_increment: 1
             FA_decrement_factor: 0.5
             
@@ -131,7 +131,7 @@ max_packet_size: 3
 packet_injection_rate: 0.00001
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_TABLE_BASED
-traffic_table_filename: "traffic_tables/sparse_dual_hotspot.txt"
+traffic_table_filename: "traffic_tables/cluster_hotspot_2x2.txt"
 
 use_winoc: true
 use_wirxsleep: false
