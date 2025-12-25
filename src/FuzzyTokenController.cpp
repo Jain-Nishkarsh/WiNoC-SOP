@@ -68,7 +68,10 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     }
 
     // Initialize SHT
-    for(int i=0; i<64; i++) {
+    sht.resize(numNodes);
+    nodeToIndex.clear();
+    for(int i=0; i<numNodes; i++) {
+        nodeToIndex[nodeIds[i]] = i;
         sht[i].success_score = 0.0;
         sht[i].last_visit_cycle = 0;
     }
@@ -221,17 +224,20 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
 }
 
 void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id) {
-    for (int i = 0; i < 64; i++) {
+    for (int i = 0; i < sht.size(); i++) {
         // Global Decay: Everyone loses 10% of their history every step
         sht[i].success_score *= 0.9; 
         
-        // Reward: Only the node that actually moved data gets the +1.0
-        if (outcome == OUTCOME_SUCCESS && i == source_id) {
-            sht[i].success_score += 1.0; 
-        }
-        
         // Safety: If the score is tiny, just set to 0 to save computation
         if (sht[i].success_score < 0.001) sht[i].success_score = 0;
+    }
+
+    // Reward: Only the node that actually moved data gets the +1.0
+    if (outcome == OUTCOME_SUCCESS && source_id != -1) {
+        auto it = nodeToIndex.find(source_id);
+        if (it != nodeToIndex.end()) {
+            sht[it->second].success_score += 1.0;
+        }
     }
 }
 
@@ -242,20 +248,28 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     uint64_t T = step_start_cycle + currentStepCycles;
 
     // Update last_visit_cycle for the current token holder
-    if (tokenID >= 0 && tokenID < 64) {
-        sht[tokenID].last_visit_cycle = T;
+    if (nodeToIndex.count(tokenID)) {
+        sht[nodeToIndex[tokenID]].last_visit_cycle = T;
     }
 
     // Weights
-    double alpha = 10;
-    double Wa = 0.1; // Weight for age (logarithmic)
+    double alpha = 12.0; // Weight for exploitation
+    double Wa = 1.0; // Weight for age (square root)
 
     // 1. Calculate Score for Sequential Neighbor (Baseline)
     int next_seq_idx = (tokenRingPosition + 1) % tokenRingOrder.size();
     int seq_node = tokenRingOrder[next_seq_idx];
-    double seq_exploitation = sht[seq_node].success_score;
-    uint64_t seq_age = (T > sht[seq_node].last_visit_cycle) ? (T - sht[seq_node].last_visit_cycle) : 0;
-    double seq_exploration = Wa * std::log((double)seq_age + 1.0);
+    
+    double seq_exploitation = 0.0;
+    uint64_t seq_age = 0;
+    
+    if (nodeToIndex.count(seq_node)) {
+        int idx = nodeToIndex[seq_node];
+        seq_exploitation = sht[idx].success_score;
+        seq_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+    }
+    
+    double seq_exploration = Wa * std::sqrt((double)seq_age);
     double seq_score = alpha * seq_exploitation + seq_exploration;
 
     double max_score = -1.0;
@@ -263,11 +277,12 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
 
     for (int i = 0; i < numNodes; i++) {
         int nodeId = tokenRingOrder[i];
-        if (nodeId >= 64) continue; // SHT is size 64
+        if (nodeToIndex.find(nodeId) == nodeToIndex.end()) continue;
+        int idx = nodeToIndex[nodeId];
         
-        double exploitation = sht[nodeId].success_score;
-        uint64_t age = (T > sht[nodeId].last_visit_cycle) ? (T - sht[nodeId].last_visit_cycle) : 0;
-        double exploration = Wa * std::log((double)age + 1.0);
+        double exploitation = sht[idx].success_score;
+        uint64_t age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+        double exploration = Wa * std::sqrt((double)age);
         
         double score = alpha * exploitation + exploration;
         
@@ -293,9 +308,10 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     // Store debug metrics
     last_swj_score = max_score;
     last_swj_target = best_node;
-    if (best_node != -1) {
-        last_swj_success = sht[best_node].success_score;
-        last_swj_age = (T > sht[best_node].last_visit_cycle) ? (T - sht[best_node].last_visit_cycle) : 0;
+    if (best_node != -1 && nodeToIndex.count(best_node)) {
+        int idx = nodeToIndex[best_node];
+        last_swj_success = sht[idx].success_score;
+        last_swj_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
     } else {
         last_swj_success = 0.0;
         last_swj_age = 0;

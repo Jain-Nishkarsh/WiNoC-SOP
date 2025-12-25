@@ -1,0 +1,333 @@
+# Tuned FUZZY TOKEN - 16x16 Mesh with Gaussian PI
+# Derived from custom_config/fuzzy_swj_8x8_64hubs.yaml
+# Changes: 16x16 mesh, 256 hubs
+
+topology: MESH
+mesh_dim_x: 16
+mesh_dim_y: 16
+buffer_depth: 64
+flit_size: 16
+r2h_link_length: 2.0
+r2r_link_length: 1.0
+n_virtual_channels: 1
+
+routing_algorithm: XY
+routing_table_filename: ""
+dyad_threshold: 0.6
+# da_threshold: 5
+selection_strategy: NOP
+
+Hubs:
+    defaults:
+        rx_radio_channels: [0]
+        tx_radio_channels: [0]
+        attached_nodes: []
+        to_tile_buffer_size: 32
+        from_tile_buffer_size: 32
+        rx_buffer_size: 64
+        tx_buffer_size: 64
+
+    0: { attached_nodes: [0] }
+    1: { attached_nodes: [1] }
+    2: { attached_nodes: [2] }
+    3: { attached_nodes: [3] }
+    4: { attached_nodes: [4] }
+    5: { attached_nodes: [5] }
+    6: { attached_nodes: [6] }
+    7: { attached_nodes: [7] }
+    8: { attached_nodes: [8] }
+    9: { attached_nodes: [9] }
+    10: { attached_nodes: [10] }
+    11: { attached_nodes: [11] }
+    12: { attached_nodes: [12] }
+    13: { attached_nodes: [13] }
+    14: { attached_nodes: [14] }
+    15: { attached_nodes: [15] }
+    16: { attached_nodes: [16] }
+    17: { attached_nodes: [17] }
+    18: { attached_nodes: [18] }
+    19: { attached_nodes: [19] }
+    20: { attached_nodes: [20] }
+    21: { attached_nodes: [21] }
+    22: { attached_nodes: [22] }
+    23: { attached_nodes: [23] }
+    24: { attached_nodes: [24] }
+    25: { attached_nodes: [25] }
+    26: { attached_nodes: [26] }
+    27: { attached_nodes: [27] }
+    28: { attached_nodes: [28] }
+    29: { attached_nodes: [29] }
+    30: { attached_nodes: [30] }
+    31: { attached_nodes: [31] }
+    32: { attached_nodes: [32] }
+    33: { attached_nodes: [33] }
+    34: { attached_nodes: [34] }
+    35: { attached_nodes: [35] }
+    36: { attached_nodes: [36] }
+    37: { attached_nodes: [37] }
+    38: { attached_nodes: [38] }
+    39: { attached_nodes: [39] }
+    40: { attached_nodes: [40] }
+    41: { attached_nodes: [41] }
+    42: { attached_nodes: [42] }
+    43: { attached_nodes: [43] }
+    44: { attached_nodes: [44] }
+    45: { attached_nodes: [45] }
+    46: { attached_nodes: [46] }
+    47: { attached_nodes: [47] }
+    48: { attached_nodes: [48] }
+    49: { attached_nodes: [49] }
+    50: { attached_nodes: [50] }
+    51: { attached_nodes: [51] }
+    52: { attached_nodes: [52] }
+    53: { attached_nodes: [53] }
+    54: { attached_nodes: [54] }
+    55: { attached_nodes: [55] }
+    56: { attached_nodes: [56] }
+    57: { attached_nodes: [57] }
+    58: { attached_nodes: [58] }
+    59: { attached_nodes: [59] }
+    60: { attached_nodes: [60] }
+    61: { attached_nodes: [61] }
+    62: { attached_nodes: [62] }
+    63: { attached_nodes: [63] }
+    64: { attached_nodes: [64] }
+    65: { attached_nodes: [65] }
+    66: { attached_nodes: [66] }
+    67: { attached_nodes: [67] }
+    68: { attached_nodes: [68] }
+    69: { attached_nodes: [69] }
+    70: { attached_nodes: [70] }
+    71: { attached_nodes: [71] }
+    72: { attached_nodes: [72] }
+    73: { attached_nodes: [73] }
+    74: { attached_nodes: [74] }
+    75: { attached_nodes: [75] }
+    76: { attached_nodes: [76] }
+    77: { attached_nodes: [77] }
+    78: { attached_nodes: [78] }
+    79: { attached_nodes: [79] }
+    80: { attached_nodes: [80] }
+    81: { attached_nodes: [81] }
+    82: { attached_nodes: [82] }
+    83: { attached_nodes: [83] }
+    84: { attached_nodes: [84] }
+    85: { attached_nodes: [85] }
+    86: { attached_nodes: [86] }
+    87: { attached_nodes: [87] }
+    88: { attached_nodes: [88] }
+    89: { attached_nodes: [89] }
+    90: { attached_nodes: [90] }
+    91: { attached_nodes: [91] }
+    92: { attached_nodes: [92] }
+    93: { attached_nodes: [93] }
+    94: { attached_nodes: [94] }
+    95: { attached_nodes: [95] }
+    96: { attached_nodes: [96] }
+    97: { attached_nodes: [97] }
+    98: { attached_nodes: [98] }
+    99: { attached_nodes: [99] }
+    100: { attached_nodes: [100] }
+    101: { attached_nodes: [101] }
+    102: { attached_nodes: [102] }
+    103: { attached_nodes: [103] }
+    104: { attached_nodes: [104] }
+    105: { attached_nodes: [105] }
+    106: { attached_nodes: [106] }
+    107: { attached_nodes: [107] }
+    108: { attached_nodes: [108] }
+    109: { attached_nodes: [109] }
+    110: { attached_nodes: [110] }
+    111: { attached_nodes: [111] }
+    112: { attached_nodes: [112] }
+    113: { attached_nodes: [113] }
+    114: { attached_nodes: [114] }
+    115: { attached_nodes: [115] }
+    116: { attached_nodes: [116] }
+    117: { attached_nodes: [117] }
+    118: { attached_nodes: [118] }
+    119: { attached_nodes: [119] }
+    120: { attached_nodes: [120] }
+    121: { attached_nodes: [121] }
+    122: { attached_nodes: [122] }
+    123: { attached_nodes: [123] }
+    124: { attached_nodes: [124] }
+    125: { attached_nodes: [125] }
+    126: { attached_nodes: [126] }
+    127: { attached_nodes: [127] }
+    128: { attached_nodes: [128] }
+    129: { attached_nodes: [129] }
+    130: { attached_nodes: [130] }
+    131: { attached_nodes: [131] }
+    132: { attached_nodes: [132] }
+    133: { attached_nodes: [133] }
+    134: { attached_nodes: [134] }
+    135: { attached_nodes: [135] }
+    136: { attached_nodes: [136] }
+    137: { attached_nodes: [137] }
+    138: { attached_nodes: [138] }
+    139: { attached_nodes: [139] }
+    140: { attached_nodes: [140] }
+    141: { attached_nodes: [141] }
+    142: { attached_nodes: [142] }
+    143: { attached_nodes: [143] }
+    144: { attached_nodes: [144] }
+    145: { attached_nodes: [145] }
+    146: { attached_nodes: [146] }
+    147: { attached_nodes: [147] }
+    148: { attached_nodes: [148] }
+    149: { attached_nodes: [149] }
+    150: { attached_nodes: [150] }
+    151: { attached_nodes: [151] }
+    152: { attached_nodes: [152] }
+    153: { attached_nodes: [153] }
+    154: { attached_nodes: [154] }
+    155: { attached_nodes: [155] }
+    156: { attached_nodes: [156] }
+    157: { attached_nodes: [157] }
+    158: { attached_nodes: [158] }
+    159: { attached_nodes: [159] }
+    160: { attached_nodes: [160] }
+    161: { attached_nodes: [161] }
+    162: { attached_nodes: [162] }
+    163: { attached_nodes: [163] }
+    164: { attached_nodes: [164] }
+    165: { attached_nodes: [165] }
+    166: { attached_nodes: [166] }
+    167: { attached_nodes: [167] }
+    168: { attached_nodes: [168] }
+    169: { attached_nodes: [169] }
+    170: { attached_nodes: [170] }
+    171: { attached_nodes: [171] }
+    172: { attached_nodes: [172] }
+    173: { attached_nodes: [173] }
+    174: { attached_nodes: [174] }
+    175: { attached_nodes: [175] }
+    176: { attached_nodes: [176] }
+    177: { attached_nodes: [177] }
+    178: { attached_nodes: [178] }
+    179: { attached_nodes: [179] }
+    180: { attached_nodes: [180] }
+    181: { attached_nodes: [181] }
+    182: { attached_nodes: [182] }
+    183: { attached_nodes: [183] }
+    184: { attached_nodes: [184] }
+    185: { attached_nodes: [185] }
+    186: { attached_nodes: [186] }
+    187: { attached_nodes: [187] }
+    188: { attached_nodes: [188] }
+    189: { attached_nodes: [189] }
+    190: { attached_nodes: [190] }
+    191: { attached_nodes: [191] }
+    192: { attached_nodes: [192] }
+    193: { attached_nodes: [193] }
+    194: { attached_nodes: [194] }
+    195: { attached_nodes: [195] }
+    196: { attached_nodes: [196] }
+    197: { attached_nodes: [197] }
+    198: { attached_nodes: [198] }
+    199: { attached_nodes: [199] }
+    200: { attached_nodes: [200] }
+    201: { attached_nodes: [201] }
+    202: { attached_nodes: [202] }
+    203: { attached_nodes: [203] }
+    204: { attached_nodes: [204] }
+    205: { attached_nodes: [205] }
+    206: { attached_nodes: [206] }
+    207: { attached_nodes: [207] }
+    208: { attached_nodes: [208] }
+    209: { attached_nodes: [209] }
+    210: { attached_nodes: [210] }
+    211: { attached_nodes: [211] }
+    212: { attached_nodes: [212] }
+    213: { attached_nodes: [213] }
+    214: { attached_nodes: [214] }
+    215: { attached_nodes: [215] }
+    216: { attached_nodes: [216] }
+    217: { attached_nodes: [217] }
+    218: { attached_nodes: [218] }
+    219: { attached_nodes: [219] }
+    220: { attached_nodes: [220] }
+    221: { attached_nodes: [221] }
+    222: { attached_nodes: [222] }
+    223: { attached_nodes: [223] }
+    224: { attached_nodes: [224] }
+    225: { attached_nodes: [225] }
+    226: { attached_nodes: [226] }
+    227: { attached_nodes: [227] }
+    228: { attached_nodes: [228] }
+    229: { attached_nodes: [229] }
+    230: { attached_nodes: [230] }
+    231: { attached_nodes: [231] }
+    232: { attached_nodes: [232] }
+    233: { attached_nodes: [233] }
+    234: { attached_nodes: [234] }
+    235: { attached_nodes: [235] }
+    236: { attached_nodes: [236] }
+    237: { attached_nodes: [237] }
+    238: { attached_nodes: [238] }
+    239: { attached_nodes: [239] }
+    240: { attached_nodes: [240] }
+    241: { attached_nodes: [241] }
+    242: { attached_nodes: [242] }
+    243: { attached_nodes: [243] }
+    244: { attached_nodes: [244] }
+    245: { attached_nodes: [245] }
+    246: { attached_nodes: [246] }
+    247: { attached_nodes: [247] }
+    248: { attached_nodes: [248] }
+    249: { attached_nodes: [249] }
+    250: { attached_nodes: [250] }
+    251: { attached_nodes: [251] }
+    252: { attached_nodes: [252] }
+    253: { attached_nodes: [253] }
+    254: { attached_nodes: [254] }
+    255: { attached_nodes: [255] }
+
+RadioChannels:
+    defaults:
+        data_rate: 16
+        ber: [0, 0]
+        mac_policy: [FUZZY_SWJ]
+        fuzzy_token:
+            preamble_cycles: 1
+            thr1: 0.3
+            thr2: 0.7
+            thr_is_percentage: true
+
+            initial_FA: 16
+            FA_increment: 1
+            FA_decrement_factor: 0.5
+            
+            pi_type: gaussian
+            
+            min_transmission_prob: 0.2
+            initial_token_holder: 0
+            token_order: static
+
+clock_period_ps: 1000
+reset_time: 100
+simulation_time: 10000
+stats_warm_up_time: 1000
+
+min_packet_size: 3
+max_packet_size: 3
+packet_injection_rate: 0.005
+probability_of_retransmission: 0.01
+traffic_distribution: TRAFFIC_TABLE_BASED
+traffic_table_filename: "traffic_tables/memory_corners_16x16.txt"
+
+use_winoc: true
+use_wirxsleep: false
+
+detailed: false
+verbose_mode: VERBOSE_LOW
+trace_mode: false
+trace_filename: ""
+max_volume_to_be_drained: 0
+show_buffer_stats: false
+
+# CSV Logging
+csv_log_enabled: true
+csv_routing_log_filename: ""
+csv_mac_log_filename: "fuzzy_test_swj_16x16.csv"

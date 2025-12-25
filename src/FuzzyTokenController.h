@@ -168,7 +168,8 @@ public:
     void advanceTokenSmart();
 
     // SWJ (Success-Weighted Jump)
-    HistoryEntry sht[64];
+    vector<HistoryEntry> sht;
+    map<int, int> nodeToIndex;
     int last_smoothing_cycle;
     
     // Debug metrics for SWJ
