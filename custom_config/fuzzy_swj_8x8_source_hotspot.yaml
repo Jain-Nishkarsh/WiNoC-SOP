@@ -131,7 +131,7 @@ max_packet_size: 3
 packet_injection_rate: 0.00001
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_TABLE_BASED
-traffic_table_filename: "traffic_tables/cluster_hotspot_2x2.txt"
+traffic_table_filename: "traffic_tables/spatial_stress_test.txt"
 
 use_winoc: true
 use_wirxsleep: false
@@ -146,4 +146,4 @@ show_buffer_stats: false
 # CSV Logging
 csv_log_enabled: true
 csv_routing_log_filename: ""
-csv_mac_log_filename: "fuzzy_test_swj_hotspot.csv"
+csv_mac_log_filename: "fuzzy_test_swj_spatial.csv"

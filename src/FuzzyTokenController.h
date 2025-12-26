@@ -171,6 +171,7 @@ public:
     vector<HistoryEntry> sht;
     map<int, int> nodeToIndex;
     int last_smoothing_cycle;
+    int tenure_cycles_remaining; // Tenure Lock
     
     // Debug metrics for SWJ
     double last_swj_score;
@@ -178,7 +179,7 @@ public:
     uint64_t last_swj_age;
     int last_swj_target;
 
-    void updateSHT(StepOutcome outcome, int source_id);
+    void updateSHT(StepOutcome outcome, int source_id, int dst_id = -1);
     void advanceTokenSWJ();
 };
 
@@ -202,7 +203,7 @@ public:
     void registerChannel(int channelId, const FuzzyTokenConfig& config, 
                         int numNodes, const vector<int>& nodeIds, const string& policy);
     FuzzyTokenChannelState* getChannelState(int channelId);
-    void endStep(int channelId, StepOutcome outcome, int stepCycles);
+    void endStep(int channelId, StepOutcome outcome, int stepCycles, int dst_id = -1);
     void reset();
     void printStats(int channelId);
     void printAllStats();

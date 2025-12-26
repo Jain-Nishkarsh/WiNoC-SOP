@@ -76,6 +76,7 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         sht[i].last_visit_cycle = 0;
     }
     last_smoothing_cycle = 0;
+    tenure_cycles_remaining = 0;
     
     // Initialize SWJ debug metrics
     last_swj_score = 0.0;
@@ -223,20 +224,57 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     updateTransmissionProbabilities();
 }
 
-void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id) {
+void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id, int dst_id) {
+    double alpha = 0.05;
+    int dimX = GlobalParams::mesh_dim_x;
+
+    // 1. Global Decay
     for (int i = 0; i < sht.size(); i++) {
-        // Global Decay: Everyone loses 10% of their history every step
-        sht[i].success_score *= 0.9; 
-        
-        // Safety: If the score is tiny, just set to 0 to save computation
+        sht[i].success_score *= (1.0 - alpha);
         if (sht[i].success_score < 0.001) sht[i].success_score = 0;
     }
 
-    // Reward: Only the node that actually moved data gets the +1.0
+    // 2. Rewards (Spatial Halo)
     if (outcome == OUTCOME_SUCCESS && source_id != -1) {
-        auto it = nodeToIndex.find(source_id);
-        if (it != nodeToIndex.end()) {
-            sht[it->second].success_score += 1.0;
+        // Set Tenure Lock
+        tenure_cycles_remaining = 5;
+
+        // Source Reward
+        if (nodeToIndex.count(source_id)) {
+            sht[nodeToIndex[source_id]].success_score += alpha * 1.0;
+        }
+
+        // Destination Reward
+        if (dst_id != -1 && nodeToIndex.count(dst_id)) {
+            sht[nodeToIndex[dst_id]].success_score += alpha * 0.5;
+        }
+
+        // Neighbor Rewards
+        for (int i = 0; i < numNodes; i++) {
+            int nodeId = tokenRingOrder[i];
+            if (nodeId == source_id || nodeId == dst_id) continue;
+            if (!nodeToIndex.count(nodeId)) continue;
+
+            int x_i = nodeId % dimX;
+            int y_i = nodeId / dimX;
+
+            bool is_neighbor = false;
+
+            // Check distance to Source
+            int x_src = source_id % dimX;
+            int y_src = source_id / dimX;
+            if (std::abs(x_i - x_src) + std::abs(y_i - y_src) == 1) is_neighbor = true;
+
+            // Check distance to Dest
+            if (!is_neighbor && dst_id != -1) {
+                int x_dst = dst_id % dimX;
+                int y_dst = dst_id / dimX;
+                if (std::abs(x_i - x_dst) + std::abs(y_i - y_dst) == 1) is_neighbor = true;
+            }
+
+            if (is_neighbor) {
+                sht[nodeToIndex[nodeId]].success_score += alpha * 0.2;
+            }
         }
     }
 }
@@ -244,6 +282,15 @@ void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id) {
 void FuzzyTokenChannelState::advanceTokenSWJ() {
     // Phase 2: The Heuristic Score & Jump Target
     
+    // 0. Tenure Lock Check
+    if (tenure_cycles_remaining > 0) {
+        tenure_cycles_remaining--;
+        // Token stays at current node
+        last_swj_target = tokenID;
+        // Just for logging, we can keep the last score or set to 0
+        return; 
+    }
+
     // Current cycle T
     uint64_t T = step_start_cycle + currentStepCycles;
 
@@ -252,64 +299,61 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         sht[nodeToIndex[tokenID]].last_visit_cycle = T;
     }
 
-    // Weights
-    double alpha = 12.0; // Weight for exploitation
-    double Wa = 1.0; // Weight for age (square root)
+    // Weights (Priority Scoring)
+    double Ws = 20.0; // Weight for success (exploitation)
+    double Wa = 1.0;  // Weight for age (exploration)
+    double H_threshold = 5.0; // Stability threshold
 
-    // 1. Calculate Score for Sequential Neighbor (Baseline)
-    int next_seq_idx = (tokenRingPosition + 1) % tokenRingOrder.size();
-    int seq_node = tokenRingOrder[next_seq_idx];
-    
-    double seq_exploitation = 0.0;
-    uint64_t seq_age = 0;
-    
-    if (nodeToIndex.count(seq_node)) {
-        int idx = nodeToIndex[seq_node];
-        seq_exploitation = sht[idx].success_score;
-        seq_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+    // 1. Calculate Score for Current Holder (Stability Score)
+    double current_holder_score = 0.0;
+    if (nodeToIndex.count(tokenID)) {
+        int idx = nodeToIndex[tokenID];
+        // Age is effectively 0 for current holder
+        current_holder_score = Ws * sht[idx].success_score; 
     }
-    
-    double seq_exploration = Wa * std::sqrt((double)seq_age);
-    double seq_score = alpha * seq_exploitation + seq_exploration;
 
-    double max_score = -1.0;
-    int best_node = -1;
+    // 2. Find the best node in the rest of the chip (The Challenger)
+    int challenger_id = -1;
+    double max_challenger_score = -1.0;
 
     for (int i = 0; i < numNodes; i++) {
         int nodeId = tokenRingOrder[i];
+        if (nodeId == tokenID) continue; // Skip current holder
         if (nodeToIndex.find(nodeId) == nodeToIndex.end()) continue;
+        
         int idx = nodeToIndex[nodeId];
         
         double exploitation = sht[idx].success_score;
         uint64_t age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
         double exploration = Wa * std::sqrt((double)age);
         
-        double score = alpha * exploitation + exploration;
+        double score = Ws * exploitation + exploration;
         
-        if (score > max_score) {
-            max_score = score;
-            best_node = nodeId;
-        } else if (score == max_score) {
-            // Tie-Breaking: lowest ID
-            if (best_node == -1 || nodeId < best_node) {
-                best_node = nodeId;
+        if (score > max_challenger_score) {
+            max_challenger_score = score;
+            challenger_id = nodeId;
+        } else if (score == max_challenger_score) {
+             // Tie-Breaking: lowest ID
+            if (challenger_id == -1 || nodeId < challenger_id) {
+                challenger_id = nodeId;
             }
         }
     }
-    
-    // 2. Apply Hysteresis (10% Rule)
-    // If the best node is not significantly better than the sequential neighbor, stick to sequential
-    // Only check hysteresis if we are actually jumping (target != sequential)
-    // if (best_node != seq_node && max_score <= 1.1 * seq_score) {
-    //     best_node = seq_node;
-    //     max_score = seq_score;
-    // }
-    
+
+    // 3. The Hysteresis Decision
+    int next_token_holder = tokenID;
+    double winning_score = current_holder_score;
+
+    if (challenger_id != -1 && max_challenger_score > (current_holder_score + H_threshold)) {
+        next_token_holder = challenger_id;
+        winning_score = max_challenger_score;
+    }
+
     // Store debug metrics
-    last_swj_score = max_score;
-    last_swj_target = best_node;
-    if (best_node != -1 && nodeToIndex.count(best_node)) {
-        int idx = nodeToIndex[best_node];
+    last_swj_score = winning_score;
+    last_swj_target = next_token_holder;
+    if (next_token_holder != -1 && nodeToIndex.count(next_token_holder)) {
+        int idx = nodeToIndex[next_token_holder];
         last_swj_success = sht[idx].success_score;
         last_swj_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
     } else {
@@ -319,23 +363,20 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     
     int oldTokenID = tokenID;
     
-    if (best_node != -1) {
-        // Find position of best_node in tokenRingOrder
+    if (next_token_holder != tokenID) {
+        // Find position of next_token_holder in tokenRingOrder
         for(int i=0; i<tokenRingOrder.size(); ++i) {
-            if (tokenRingOrder[i] == best_node) {
+            if (tokenRingOrder[i] == next_token_holder) {
                 tokenRingPosition = i;
                 break;
             }
         }
-        tokenID = best_node;
-    } else {
-        // Fallback
-        tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
-        tokenID = tokenRingOrder[tokenRingPosition];
+        tokenID = next_token_holder;
     }
+    // Else: Stay put, tokenRingPosition remains same
     
     if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldTokenID != tokenID) {
-        cout << "[SWJ-JUMP] " << oldTokenID << " -> " << tokenID << " (Score: " << max_score << ")" << endl;
+        cout << "[SWJ-JUMP] " << oldTokenID << " -> " << tokenID << " (Score: " << winning_score << ")" << endl;
     }
     
     rebuildFuzzyArea();
@@ -438,7 +479,7 @@ FuzzyTokenChannelState* FuzzyTokenController::getChannelState(int channelId) {
     return channelStates[channelId];
 }
 
-void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepCycles) {
+void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepCycles, int dst_id) {
     FuzzyTokenChannelState* state = getChannelState(channelId);
     if (!state) return;
     
@@ -518,7 +559,7 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
                  success_node_for_sht = *state->transmittingHubsThisStep.begin();
              }
         }
-        state->updateSHT(outcome, success_node_for_sht);
+        state->updateSHT(outcome, success_node_for_sht, dst_id);
         state->advanceTokenSWJ();
         state->switchMode(outcome);
     } else if (useJumpFeatures && inFocusedMode) {

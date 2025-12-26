@@ -120,7 +120,7 @@ void Initiator::thread_process()
 				if (hub->isFuzzyTokenChannel(_channel_id)) {
 					cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " successfully sent TAIL on channel " 
 						 << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
-					hub->completeFuzzyTokenTransmission(_channel_id);
+					hub->completeFuzzyTokenTransmission(_channel_id, destHub);
 				}
 			}
 		}

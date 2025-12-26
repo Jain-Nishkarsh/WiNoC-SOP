@@ -1133,10 +1133,10 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	}
 }
 
-void Hub::completeFuzzyTokenTransmission(int channel)
+void Hub::completeFuzzyTokenTransmission(int channel, int dst_id)
 {
 	if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-		cerr << "[COMPLETE-TX] Channel " << channel << endl;
+		cerr << "[COMPLETE-TX] Channel " << channel << " dst=" << dst_id << endl;
 	}
 	
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
@@ -1162,10 +1162,10 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 
 	// Transmission completed; apply deferred congestion if any
 	if (fuzzyTokenDeferredCongestion[channel]) {
-		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles);
+		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles, dst_id);
 		fuzzyTokenDeferredCongestion[channel] = false; // consume the deferred flag
 	} else {
-		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
+		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles, dst_id);
 	}
 	
 	// Reset step state for next transmission
