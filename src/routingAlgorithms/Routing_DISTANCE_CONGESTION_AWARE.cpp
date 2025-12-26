@@ -33,7 +33,7 @@ vector<int> Routing_DISTANCE_CONGESTION_AWARE::route(Router * router, const Rout
             // Additional guard: if the source hub's TX buffers are congested, avoid wireless
             int current_hub_id = getHubId(current_id);
             if (current_hub_id != NOT_VALID && Hub::isTxCongestedForHub(current_hub_id)) {
-                if (GlobalParams::verbose_mode >= VERBOSE_LOW) {
+                if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
                     cerr << "CA: Fallback to WIRED (hub TX congested) for "
                          << current_id << "->" << destination_id
                          << " dist=" << manhattan_distance << endl;
@@ -54,7 +54,7 @@ vector<int> Routing_DISTANCE_CONGESTION_AWARE::route(Router * router, const Rout
                 directions.push_back(DIRECTION_HUB);
                 return directions;
             } else {
-                if (GlobalParams::verbose_mode >= VERBOSE_LOW) {
+                if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
                     cerr << "CA: Fallback to WIRED (hub buffer full) for "
                          << current_id << "->" << destination_id
                          << " dist=" << manhattan_distance << endl;

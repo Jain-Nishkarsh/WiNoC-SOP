@@ -129,9 +129,22 @@ int sc_main(int arg_num, char *arg_vet[])
     reset.write(0);
     cout << " done! " << endl;
     cout << " Now running for " << GlobalParams:: simulation_time << " cycles..." << endl;
-    // fix clock periods different from 1ns
-    //sc_start(GlobalParams::simulation_time, SC_NS);
-    sc_start(GlobalParams::simulation_time * GlobalParams::clock_period_ps, SC_PS);
+    
+    // Simulation Loop with Heartbeat
+    int total_cycles = GlobalParams::simulation_time;
+    int cycles_per_step = 10000;
+    int cycles_done = 0;
+    
+    while (cycles_done < total_cycles) {
+        int cycles_to_run = std::min(cycles_per_step, total_cycles - cycles_done);
+        sc_start(cycles_to_run * GlobalParams::clock_period_ps, SC_PS);
+        cycles_done += cycles_to_run;
+        
+        float progress = (float)cycles_done / total_cycles * 100.0;
+        cout << "Progress: " << progress << "% (Cycle: " << cycles_done << ")" << endl;
+        
+        if (sc_get_status() == SC_STOPPED) break;
+    }
 
 
     // Close the simulation

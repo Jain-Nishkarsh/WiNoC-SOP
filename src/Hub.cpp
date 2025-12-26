@@ -175,7 +175,7 @@ void Hub::txRadioProcessTokenPacket(int channel)
 			Flit flit = init[channel]->buffer_tx.Front();
 			
 			token_packet_tx_count++;
-			if (token_packet_tx_count % 10 == 0) {
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH && token_packet_tx_count % 10 == 0) {
 				cerr << "[TOKEN-PACKET-TX #" << token_packet_tx_count << "] Hub " << local_id 
 				     << " transmitting (src=" << flit.src_id << ", dst=" << flit.dst_id << ")" << endl;
 			}
@@ -295,7 +295,7 @@ void Hub::antennaToTileProcess()
 					buffer_full_status_tx[i].read().mask[vc] == false)
 				{
 					LOG << "Flit " << flit << " moved from buffer_to_tile[" << i <<"][" << vc << "] to signal flit_tx["<<i<<"] " << endl;
-					if (flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T->ROUTER] Hub " << local_id << " sending HEAD flit (src=" << flit.src_id 
 						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
 						     << ") from buffer_to_tile[" << i << "][" << vc << "] to Router" << endl;
@@ -313,7 +313,7 @@ void Hub::antennaToTileProcess()
 				else
 				{
 					LOG << "Flit " << flit << " cannot move from buffer_to_tile[" << i <<"] [" << vc << "] to signal flit_tx["<<i<<"] " << endl;
-					if (flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T-STALL] Hub " << local_id << " cannot send HEAD flit (src=" << flit.src_id 
 						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
 						     << ") to Router - backpressure from buffer_to_tile[" << i << "][" << vc << "]" << endl;
@@ -408,7 +408,7 @@ void Hub::antennaToTileProcess()
 					target[channel]->buffer_rx.Pop();
 					power.antennaBufferPop();
 					LOG << "*** [Ch" << channel << "] Moving flit  " << received_flit << " from buffer_rx to buffer_to_tile[" << port <<"][" << vc << "]" << endl;
-					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && received_flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[RX->B2T] Hub " << local_id << " moving HEAD flit (src=" << received_flit.src_id 
 						     << ", dst=" << received_flit.dst_id << ", seq=" << received_flit.sequence_no 
 						     << ") from buffer_rx[" << channel << "] to buffer_to_tile[" << port << "][" << vc << "]" << endl;
@@ -429,7 +429,7 @@ void Hub::antennaToTileProcess()
 				else
 				{
 					LOG << "Full buffer_to_tile[" << port <<"][" << vc << "]" << ", cannot store " << received_flit << endl;
-					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && received_flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T-FULL] Hub " << local_id << " STALLED - buffer_to_tile[" << port << "][" << vc << "] FULL, "
 						     << "cannot move HEAD flit (src=" << received_flit.src_id << ", dst=" << received_flit.dst_id 
 						     << ", seq=" << received_flit.sequence_no << ")" << endl;
