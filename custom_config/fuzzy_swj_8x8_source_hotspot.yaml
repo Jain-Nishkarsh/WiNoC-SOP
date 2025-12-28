@@ -123,7 +123,7 @@ RadioChannels:
 
 clock_period_ps: 1000
 reset_time: 0
-simulation_time: 2500000
+simulation_time: 100000
 stats_warm_up_time: 0
 
 min_packet_size: 3
@@ -131,7 +131,7 @@ max_packet_size: 3
 packet_injection_rate: 0.00001
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_TABLE_BASED
-traffic_table_filename: "traffic_tables/canneal-simmedium-trace.txt"
+traffic_table_filename: "traffic_tables/quad_hotspot.txt"
 
 use_winoc: true
 use_wirxsleep: false
