@@ -88,6 +88,13 @@ namespace YAML {
             config.fuzzy_consecutive_windows = node["fuzzy_consecutive_windows"].as<int>(4);
             config.focused_consecutive_windows = node["focused_consecutive_windows"].as<int>(4);
             
+            // SWJ parameters
+            config.Ws = node["Ws"].as<double>(20.0);
+            config.Wa = node["Wa"].as<double>(1.0);
+            config.H_threshold = node["H_threshold"].as<double>(5.0);
+            config.alpha = node["alpha"].as<double>(0.05);
+            config.tenure_lock_cycles = node["tenure_lock_cycles"].as<int>(5);
+
             return true;
         }
     };

@@ -225,7 +225,7 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
 }
 
 void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id, int dst_id) {
-    double alpha = 0.2;
+    double alpha = config.alpha;
     int dimX = GlobalParams::mesh_dim_x;
 
     // 1. Global Decay
@@ -237,7 +237,7 @@ void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id, int d
     // 2. Rewards (Spatial Halo)
     if (outcome == OUTCOME_SUCCESS && source_id != -1) {
         // Set Tenure Lock
-        tenure_cycles_remaining = 1;
+        tenure_cycles_remaining = config.tenure_lock_cycles;
 
         // Source Reward
         if (nodeToIndex.count(source_id)) {
@@ -300,9 +300,9 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     }
 
     // Weights (Priority Scoring)
-    double Ws = 5.0; // Weight for success (exploitation)
-    double Wa = 4.0;  // Weight for age (exploration)
-    double H_threshold = 1.0; // Stability threshold
+    double Ws = config.Ws; // Weight for success (exploitation)
+    double Wa = config.Wa;  // Weight for age (exploration)
+    double H_threshold = config.H_threshold; // Stability threshold
 
     // 1. Calculate Score for Current Holder (Stability Score)
     double current_holder_score = 0.0;

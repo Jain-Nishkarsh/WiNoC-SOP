@@ -122,6 +122,13 @@ typedef struct {
     int focused_ready_threshold;     // M: Min ready hubs for FOCUSED mode (>M ready) (default: 8)
     int fuzzy_consecutive_windows;   // Consecutive windows ≤K to trigger FUZZY (default: 4)
     int focused_consecutive_windows; // Consecutive windows >M to trigger FOCUSED (default: 4)
+
+    // SWJ parameters
+    double Ws;                  // Weight for success (exploitation) (default: 20.0)
+    double Wa;                  // Weight for age (exploration) (default: 1.0)
+    double H_threshold;         // Stability threshold (default: 5.0)
+    double alpha;               // Decay factor for SHT (default: 0.05)
+    int tenure_lock_cycles;     // Tenure lock duration (default: 5)
 } FuzzyTokenConfig;
 
 typedef struct {
