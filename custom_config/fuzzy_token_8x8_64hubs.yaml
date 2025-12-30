@@ -106,24 +106,24 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.3
-            thr2: 0.7
+            thr1: 0.1
+            thr2: 0.9
             thr_is_percentage: true
 
-            initial_FA: 64
+            initial_FA: 16
             FA_increment: 1
             FA_decrement_factor: 0.5
             
             pi_type: gaussian
             
-            min_transmission_prob: 0.2
+            min_transmission_prob: 0.1
             initial_token_holder: 0
             token_order: static
 
 clock_period_ps: 1000
-reset_time: 100
-simulation_time: 5000
-stats_warm_up_time: 100
+reset_time: 1000
+simulation_time: 20000
+stats_warm_up_time: 1000
 
 min_packet_size: 3
 max_packet_size: 3

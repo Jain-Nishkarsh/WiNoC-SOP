@@ -75,6 +75,7 @@ using namespace std;
 #define TRAFFIC_BUTTERFLY      "TRAFFIC_BUTTERFLY"
 #define TRAFFIC_LOCAL	       "TRAFFIC_LOCAL"
 #define TRAFFIC_ULOCAL	       "TRAFFIC_ULOCAL"
+#define TRAFFIC_SOTERIOU       "TRAFFIC_SOTERIOU"
 
 // Verbosity levels
 #define VERBOSE_OFF            "VERBOSE_OFF"
@@ -220,6 +221,12 @@ struct GlobalParams {
     static bool use_winoc;
     static int winoc_dst_hops;
     static bool use_powermanager;
+
+    // Soteriou Traffic Parameters
+    static double traffic_soteriou_sigma;
+    static double traffic_soteriou_hurst;
+    static double traffic_soteriou_alpha;
+    static pair<int, int> traffic_soteriou_hotspot;
 
     // CSV Logging
     static bool csv_log_enabled;

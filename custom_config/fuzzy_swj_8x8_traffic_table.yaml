@@ -106,12 +106,12 @@ RadioChannels:
         mac_policy: [FUZZY_SWJ]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.2
-            thr2: 0.8
+            thr1: 0.35
+            thr2: 0.7
             thr_is_percentage: true
 
             initial_FA: 16
-            FA_increment: 2
+            FA_increment: 1
             FA_decrement_factor: 0.5
             
             pi_type: gaussian
@@ -120,10 +120,10 @@ RadioChannels:
             initial_token_holder: 0
             token_order: static
 
-            Ws: 30.0
-            Wa: 2.0
-            H_threshold: 10.0
-            alpha: 0.1
+            Ws: 54.42
+            Wa: 15.14
+            H_threshold: 25.97
+            alpha: 0.08
             tenure_lock_cycles: 3
 
 clock_period_ps: 1000
@@ -149,6 +149,6 @@ max_volume_to_be_drained: 0
 show_buffer_stats: false
 
 # CSV Logging
-csv_log_enabled: true
+csv_log_enabled: false
 csv_routing_log_filename: ""
 csv_mac_log_filename: "swj_spatiotemporal_all_bg.csv"

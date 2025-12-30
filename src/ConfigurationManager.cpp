@@ -83,6 +83,26 @@ void loadConfiguration() {
     GlobalParams::probability_of_retransmission = readParam<double>(config, "probability_of_retransmission");
     GlobalParams::traffic_distribution = readParam<string>(config, "traffic_distribution");
     GlobalParams::traffic_table_filename = readParam<string>(config, "traffic_table_filename");
+
+    // Soteriou Traffic Configuration
+    GlobalParams::traffic_soteriou_sigma = readParam<double>(config, "traffic_soteriou_sigma", 0.0);
+    GlobalParams::traffic_soteriou_hurst = readParam<double>(config, "traffic_soteriou_hurst", 0.0);
+
+    // Calculate alpha from Hurst
+    if (GlobalParams::traffic_soteriou_hurst > 0) {
+        GlobalParams::traffic_soteriou_alpha = 3.0 - 2.0 * GlobalParams::traffic_soteriou_hurst;
+    } else {
+        GlobalParams::traffic_soteriou_alpha = 0.0;
+    }
+
+    // Parse hotspot for Soteriou traffic
+    if (config["traffic_soteriou_hotspot"]) {
+        GlobalParams::traffic_soteriou_hotspot.first = config["traffic_soteriou_hotspot"][0].as<int>();
+        GlobalParams::traffic_soteriou_hotspot.second = config["traffic_soteriou_hotspot"][1].as<int>();
+    } else {
+        GlobalParams::traffic_soteriou_hotspot = make_pair(0, 0);
+    }
+
     GlobalParams::clock_period_ps = readParam<int>(config, "clock_period_ps");
     GlobalParams::simulation_time = readParam<int>(config, "simulation_time");
     GlobalParams::n_virtual_channels = readParam<int>(config, "n_virtual_channels");

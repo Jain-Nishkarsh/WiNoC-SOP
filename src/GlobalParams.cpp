@@ -53,6 +53,12 @@ bool GlobalParams::use_winoc;
 int GlobalParams::winoc_dst_hops;
 bool GlobalParams::use_powermanager;
 
+// Soteriou Traffic Parameters
+double GlobalParams::traffic_soteriou_sigma;
+double GlobalParams::traffic_soteriou_hurst;
+double GlobalParams::traffic_soteriou_alpha;
+pair<int, int> GlobalParams::traffic_soteriou_hotspot;
+
 // CSV Logging
 bool GlobalParams::csv_log_enabled;
 string GlobalParams::csv_routing_log_filename;

@@ -75,6 +75,19 @@ SC_MODULE(ProcessingElement)
     int roulett();
     int findRandomDestination(int local_id,int hops);
     unsigned int getQueueSize() const;
+    
+    // Statistics
+    unsigned long injected_flits;
+    unsigned long getInjectedFlits() const { return injected_flits; }
+
+    // Soteriou Traffic Support
+    double current_packet_injection_rate; // Node specific PIR
+    bool in_burst;
+    int burst_remaining_cycles;
+    int silence_remaining_cycles;
+    
+    void updateSoteriouTraffic();
+    double getParetoRandom(double alpha, double xm);
 
     // Constructor
     SC_CTOR(ProcessingElement) {

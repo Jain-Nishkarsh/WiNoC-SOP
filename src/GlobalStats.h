@@ -63,6 +63,9 @@ class GlobalStats {
     // Returns the total number of received flits
     unsigned int getReceivedFlits();
 
+    // Returns the total number of injected flits
+    double getInjectedFlits();
+
     // number of packets that used the wireless network
     unsigned int getWirelessPackets();
 
@@ -89,6 +92,7 @@ class GlobalStats {
     void showPowerManagerStats(std::ostream & out);
 
     double getReceivedIdealFlitRatio();
+    double getReceivedInjectedFlitRatio();
 
 
 

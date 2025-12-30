@@ -106,12 +106,12 @@ RadioChannels:
         mac_policy: [FUZZY_SWJ]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.2
-            thr2: 0.8
+            thr1: 0.3
+            thr2: 0.6
             thr_is_percentage: true
 
             initial_FA: 16
-            FA_increment: 2
+            FA_increment: 1
             FA_decrement_factor: 0.5
             
             pi_type: gaussian
@@ -120,14 +120,20 @@ RadioChannels:
             initial_token_holder: 0
             token_order: static
 
+            Ws: 10
+            Wa: 10
+            H_threshold: 5
+            alpha: 0.1
+            tenure_lock_cycles: 1
+
 clock_period_ps: 1000
-reset_time: 100
+reset_time: 1000
 simulation_time: 20000
 stats_warm_up_time: 1000
 
 min_packet_size: 3
 max_packet_size: 3
-packet_injection_rate: 0.005
+packet_injection_rate: 0.01
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
@@ -145,4 +151,4 @@ show_buffer_stats: false
 # CSV Logging
 csv_log_enabled: true
 csv_routing_log_filename: ""
-csv_mac_log_filename: "swj_bursty_hurst_exp.csv"
+csv_mac_log_filename: "swj_random.csv"
