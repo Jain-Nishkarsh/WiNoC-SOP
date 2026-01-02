@@ -36,12 +36,14 @@ void ProcessingElement::txProcess()
 	req_tx.write(0);
 	current_level_tx = 0;
 	transmittedAtPreviousCycle = false;
+    injected_flits = 0;
     } else {
 	Packet packet;
 
 	if (canShot(packet)) {
 	    packet_queue.push(packet);
 	    transmittedAtPreviousCycle = true;
+        injected_flits += packet.size;
 	} else
 	    transmittedAtPreviousCycle = false;
 
@@ -114,10 +116,44 @@ bool ProcessingElement::canShot(Packet & packet)
     double now = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
 
     if (GlobalParams::traffic_distribution != TRAFFIC_TABLE_BASED) {
-	if (!transmittedAtPreviousCycle)
-	    threshold = GlobalParams::packet_injection_rate;
-	else
-	    threshold = GlobalParams::probability_of_retransmission;
+        
+        double current_pir = current_packet_injection_rate;
+
+        if (GlobalParams::traffic_distribution == TRAFFIC_SOTERIOU) {
+             if (in_burst) {
+                 burst_remaining_cycles--;
+                 if (burst_remaining_cycles <= 0) {
+                     in_burst = false;
+                     // OFF period: Pareto distributed
+                     // xm = 1 (min 1 cycle)
+                     double silence = getParetoRandom(GlobalParams::traffic_soteriou_alpha, 1.0);
+                     silence_remaining_cycles = (int)silence;
+                     if (silence_remaining_cycles < 1) silence_remaining_cycles = 1;
+                 }
+             } else {
+                 silence_remaining_cycles--;
+                 if (silence_remaining_cycles <= 0) {
+                     in_burst = true;
+                     // ON period: Fixed burst for now (e.g. 5 cycles)
+                     burst_remaining_cycles = 5; 
+                 }
+             }
+             
+             if (!in_burst) {
+                 threshold = 0.0;
+             } else {
+                 // During burst, inject at peak rate (current_pir)
+                 if (!transmittedAtPreviousCycle)
+                    threshold = current_pir;
+                 else
+                    threshold = GlobalParams::probability_of_retransmission;
+             }
+        } else {
+            if (!transmittedAtPreviousCycle)
+                threshold = current_pir;
+            else
+                threshold = GlobalParams::probability_of_retransmission;
+        }
 
 	shot = (((double) rand()) / RAND_MAX < threshold);
 	if (shot) {
@@ -137,6 +173,8 @@ bool ProcessingElement::canShot(Packet & packet)
 		    packet = trafficLocal();
         else if (GlobalParams::traffic_distribution == TRAFFIC_ULOCAL)
 		    packet = trafficULocal();
+        else if (GlobalParams::traffic_distribution == TRAFFIC_SOTERIOU)
+            packet = trafficRandom();
         else {
             cout << "Invalid traffic distribution: " << GlobalParams::traffic_distribution << endl;
             exit(-1);
@@ -490,5 +528,38 @@ int ProcessingElement::getRandomSize()
 unsigned int ProcessingElement::getQueueSize() const
 {
     return packet_queue.size();
+}
+
+void ProcessingElement::updateSoteriouTraffic()
+{
+    if (GlobalParams::traffic_distribution == TRAFFIC_SOTERIOU) {
+        int mesh_dim_x = GlobalParams::mesh_dim_x;
+        int current_x = local_id % mesh_dim_x;
+        int current_y = local_id / mesh_dim_x;
+        
+        int hotspot_x = GlobalParams::traffic_soteriou_hotspot.first;
+        int hotspot_y = GlobalParams::traffic_soteriou_hotspot.second;
+        
+        double sigma = GlobalParams::traffic_soteriou_sigma;
+        double base_lambda = GlobalParams::packet_injection_rate;
+        
+        double dist_sq = pow(current_x - hotspot_x, 2) + pow(current_y - hotspot_y, 2);
+        current_packet_injection_rate = base_lambda * exp(-dist_sq / (2 * pow(sigma, 2)));
+    } else {
+        current_packet_injection_rate = GlobalParams::packet_injection_rate;
+    }
+    
+    // Initialize temporal state
+    in_burst = false;
+    burst_remaining_cycles = 0;
+    silence_remaining_cycles = 0;
+}
+
+double ProcessingElement::getParetoRandom(double alpha, double xm)
+{
+    double u = (double)rand() / RAND_MAX;
+    // Avoid division by zero or log of zero
+    if (u <= 0) u = 1e-9;
+    return xm / pow(u, 1.0/alpha);
 }
 

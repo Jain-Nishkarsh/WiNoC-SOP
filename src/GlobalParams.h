@@ -75,6 +75,7 @@ using namespace std;
 #define TRAFFIC_BUTTERFLY      "TRAFFIC_BUTTERFLY"
 #define TRAFFIC_LOCAL	       "TRAFFIC_LOCAL"
 #define TRAFFIC_ULOCAL	       "TRAFFIC_ULOCAL"
+#define TRAFFIC_SOTERIOU       "TRAFFIC_SOTERIOU"
 
 // Verbosity levels
 #define VERBOSE_OFF            "VERBOSE_OFF"
@@ -93,6 +94,7 @@ using namespace std;
 #define FUZZY_TOKEN            "FUZZY_TOKEN"
 #define FUZZY_RCT              "FUZZY_RCT"
 #define FUZZY_RAJ              "FUZZY_RAJ"
+#define FUZZY_SWJ              "FUZZY_SWJ"
 
 enum ProbabilityDistribution {
     PI_EQUAL,
@@ -121,6 +123,13 @@ typedef struct {
     int focused_ready_threshold;     // M: Min ready hubs for FOCUSED mode (>M ready) (default: 8)
     int fuzzy_consecutive_windows;   // Consecutive windows ≤K to trigger FUZZY (default: 4)
     int focused_consecutive_windows; // Consecutive windows >M to trigger FOCUSED (default: 4)
+
+    // SWJ parameters
+    double Ws;                  // Weight for success (exploitation) (default: 20.0)
+    double Wa;                  // Weight for age (exploration) (default: 1.0)
+    double H_threshold;         // Stability threshold (default: 5.0)
+    double alpha;               // Decay factor for SHT (default: 0.05)
+    int tenure_lock_cycles;     // Tenure lock duration (default: 5)
 } FuzzyTokenConfig;
 
 typedef struct {
@@ -212,6 +221,12 @@ struct GlobalParams {
     static bool use_winoc;
     static int winoc_dst_hops;
     static bool use_powermanager;
+
+    // Soteriou Traffic Parameters
+    static double traffic_soteriou_sigma;
+    static double traffic_soteriou_hurst;
+    static double traffic_soteriou_alpha;
+    static pair<int, int> traffic_soteriou_hotspot;
 
     // CSV Logging
     static bool csv_log_enabled;

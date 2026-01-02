@@ -205,6 +205,7 @@ void NoC::buildButterfly()
 			t[i][j]->pe->local_id = tile_id;
 			t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 			t[i][j]->pe->never_transmit = true;
+            t[i][j]->pe->updateSoteriouTraffic();
 
 			// Map clock and reset
 			t[i][j]->clock(clock);
@@ -854,6 +855,7 @@ void NoC::buildBaseline()
 	    t[i][j]->pe->local_id = tile_id;
 	    t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 	    t[i][j]->pe->never_transmit = true;
+        t[i][j]->pe->updateSoteriouTraffic();
 
 	    // Map clock and reset
 	    t[i][j]->clock(clock);
@@ -1586,6 +1588,7 @@ void NoC::buildOmega()
 			t[i][j]->pe->local_id = tile_id;
 			t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 			t[i][j]->pe->never_transmit = true;
+            t[i][j]->pe->updateSoteriouTraffic();
 
 			// Map clock and reset
 			t[i][j]->clock(clock);
@@ -2209,6 +2212,8 @@ void NoC::buildMesh()
 		}
 		else
 			t[i][j]->pe->never_transmit = false;
+
+        t[i][j]->pe->updateSoteriouTraffic();
 
 	    // Map clock and reset
 	    t[i][j]->clock(clock);

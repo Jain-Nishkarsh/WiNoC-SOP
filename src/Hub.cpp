@@ -175,7 +175,7 @@ void Hub::txRadioProcessTokenPacket(int channel)
 			Flit flit = init[channel]->buffer_tx.Front();
 			
 			token_packet_tx_count++;
-			if (token_packet_tx_count % 10 == 0) {
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH && token_packet_tx_count % 10 == 0) {
 				cerr << "[TOKEN-PACKET-TX #" << token_packet_tx_count << "] Hub " << local_id 
 				     << " transmitting (src=" << flit.src_id << ", dst=" << flit.dst_id << ")" << endl;
 			}
@@ -207,10 +207,8 @@ void Hub::txRadioProcessTokenHold(int channel)
 	{
 		if (!init[channel]->buffer_tx.IsEmpty())
 		{
-			//LOG << "Token holder for channel " << channel << " with not empty buffer_tx" << endl;
 			if (current_token_expiration[channel]->read() < flit_transmission_cycles[channel])
 			{
-				//LOG << "TOKEN_HOLD policy: Not enough token expiration time for sending channel " << channel << endl;
 			}
 			else
 			{
@@ -218,10 +216,6 @@ void Hub::txRadioProcessTokenHold(int channel)
 				LOG << "*** [Ch" << channel << "] Starting transmission event" << endl;
 				init[channel]->start_request_event.notify();
 			}
-		}
-		else
-		{
-			//LOG << "TOKEN_HOLD policy: nothing to transmit, holding token for channel " << channel << endl;
 		}
 	}
 }
@@ -235,11 +229,9 @@ void Hub::txRadioProcessTokenMaxHold(int channel)
 	{
 		if (!init[channel]->buffer_tx.IsEmpty())
 		{
-			//LOG << "Token holder for channel " << channel << " with not empty buffer_tx" << endl;
 
 			if (current_token_expiration[channel]->read() < flit_transmission_cycles[channel])
 			{
-				//LOG << "TOKEN_MAX_HOLD: Not enough token expiration time, releasing token for channel " << channel << endl;
 				flag[channel]->write(RELEASE_CHANNEL);
 			}
 			else
@@ -251,7 +243,6 @@ void Hub::txRadioProcessTokenMaxHold(int channel)
 		}
 		else
 		{
-			//LOG << "TOKEN_MAX_HOLD: Buffer_tx empty, releasing token for channel " << channel << endl;
 			flag[channel]->write(RELEASE_CHANNEL);
 		}
 	}
@@ -304,7 +295,7 @@ void Hub::antennaToTileProcess()
 					buffer_full_status_tx[i].read().mask[vc] == false)
 				{
 					LOG << "Flit " << flit << " moved from buffer_to_tile[" << i <<"][" << vc << "] to signal flit_tx["<<i<<"] " << endl;
-					if (flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T->ROUTER] Hub " << local_id << " sending HEAD flit (src=" << flit.src_id 
 						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
 						     << ") from buffer_to_tile[" << i << "][" << vc << "] to Router" << endl;
@@ -322,7 +313,7 @@ void Hub::antennaToTileProcess()
 				else
 				{
 					LOG << "Flit " << flit << " cannot move from buffer_to_tile[" << i <<"] [" << vc << "] to signal flit_tx["<<i<<"] " << endl;
-					if (flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T-STALL] Hub " << local_id << " cannot send HEAD flit (src=" << flit.src_id 
 						     << ", dst=" << flit.dst_id << ", seq=" << flit.sequence_no 
 						     << ") to Router - backpressure from buffer_to_tile[" << i << "][" << vc << "]" << endl;
@@ -417,7 +408,7 @@ void Hub::antennaToTileProcess()
 					target[channel]->buffer_rx.Pop();
 					power.antennaBufferPop();
 					LOG << "*** [Ch" << channel << "] Moving flit  " << received_flit << " from buffer_rx to buffer_to_tile[" << port <<"][" << vc << "]" << endl;
-					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && received_flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[RX->B2T] Hub " << local_id << " moving HEAD flit (src=" << received_flit.src_id 
 						     << ", dst=" << received_flit.dst_id << ", seq=" << received_flit.sequence_no 
 						     << ") from buffer_rx[" << channel << "] to buffer_to_tile[" << port << "][" << vc << "]" << endl;
@@ -438,7 +429,7 @@ void Hub::antennaToTileProcess()
 				else
 				{
 					LOG << "Full buffer_to_tile[" << port <<"][" << vc << "]" << ", cannot store " << received_flit << endl;
-					if (received_flit.flit_type == FLIT_TYPE_HEAD) {
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH && received_flit.flit_type == FLIT_TYPE_HEAD) {
 						cerr << "[B2T-FULL] Hub " << local_id << " STALLED - buffer_to_tile[" << port << "][" << vc << "] FULL, "
 						     << "cannot move HEAD flit (src=" << received_flit.src_id << ", dst=" << received_flit.dst_id 
 						     << ", seq=" << received_flit.sequence_no << ")" << endl;
@@ -448,10 +439,6 @@ void Hub::antennaToTileProcess()
 			else
 			{
 				// should be ok
-				/*
-                LOG << "WARNING: empty target["<<channel<<"] buffer_rx, but reservation still present, if correct, remove assertion below " << endl;
-                assert(false);
-                */
 			}
 		}
 	}
@@ -459,19 +446,6 @@ void Hub::antennaToTileProcess()
 
 void Hub::tileToAntennaProcess()
 {
-	// double cycle = sc_time_stamp().to_double() / GlobalParams::clock_period_ps;
-	// if (cycle > 0 && cycle < 58428)
-	// {
-	//     if (local_id == 1)
-	//     {
-	//         cout << "CYCLES " << cycle << endl;
-	//         for (int j = 0; j < num_ports; j++)
-	//     	buffer_from_tile[j].Print();;
-	//         init[0]->buffer_tx.Print();
-	//         cout << endl;
-	//     }
-	// }
-
 	if (reset.read())
 	{
 		for (unsigned int i =0 ;i<txChannels.size();i++)
@@ -502,7 +476,7 @@ void Hub::tileToAntennaProcess()
 			txRadioProcessTokenHold(channel);
 		else if (macPolicy == TOKEN_MAX_HOLD)
 			txRadioProcessTokenMaxHold(channel);
-		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ)
+		else if (macPolicy == FUZZY_TOKEN || macPolicy == FUZZY_RCT || macPolicy == FUZZY_RAJ || macPolicy == FUZZY_SWJ)
 			txRadioProcessFuzzyToken(channel);
 		else
 		{
@@ -663,14 +637,6 @@ void Hub::tileToAntennaProcess()
 			Flit received_flit = flit_rx[i]->read();
 			int vc = received_flit.vc_id;
 			LOG << "Reading " << received_flit << " from signal flit_rx[" << i << "]" << endl;
-
-			/*
-            if (!buffer_from_tile[i][vc].deadlockFree())
-            {
-            LOG << " deadlock on buffer " << i << endl;
-            buffer_from_tile[i][vc].Print();
-            }
-            */
 
 			if (!buffer_from_tile[i][vc].IsFull())
 			{
@@ -850,10 +816,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	}
 	
 	FuzzyTokenNode* node = fuzzyTokenNodes[channel];
-    // cerr << "DEBUG: Hub " << local_id << " node=" << node << endl;
 	FuzzyTokenController& controller = FuzzyTokenController::getInstance();
 	FuzzyTokenChannelState* state = controller.getChannelState(channel);
-    // cerr << "DEBUG: Hub " << local_id << " state=" << state << endl;
 	
 	// NULL CHECK FIRST - return early if state not initialized yet
 	if (!state)
@@ -867,14 +831,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
     state->registerHub(this);
 
     int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
-
-	// Track step phases
-	/* 
-	if (fuzzyTokenTransmissionThisStep[channel]) {
-		fuzzyTokenStepStartCycle[channel] = current_cycle;
-		fuzzyTokenTransmissionThisStep[channel] = false;
-	}
-	*/
 
     // Synchronize with global step cycle (driven by Token Holder)
     if (state->step_start_cycle > fuzzyTokenStepStartCycle[channel]) {
@@ -907,8 +863,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
         bool enable_polling = usePlusFeatures || GlobalParams::csv_log_enabled;
         state->perform_control_minislot(current_cycle, enable_polling);
         node->resetStepState();
-        // Stall this cycle to allow control info to propagate/be processed
-        // return; 
     }
 
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
@@ -927,7 +881,6 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// PAPER-CORRECT: Synchronous step coordination
 	// Steps end after: 1 cycle (silence), 2 cycles (collision), C cycles (success)
 	// Only token holder coordinates step end to ensure ALL nodes register preambles first
-	// int current_cycle = (int)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps); // Already declared above
 	
 	
 	// Determine if we have data early (used by focused-mode fast path)
@@ -1164,30 +1117,8 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 					// NOT here, because transmission is asynchronous
 				}
 			}
-			else if (!node->isTokenHolder() && hasData)
-			{
-				// Neighbors MUST check isBusy
-				if (!is_busy)
-				{
-					if (!init[channel]->buffer_tx.IsEmpty())
-					{
-						// Register transmission
-						if (state->transmittingHubsThisStep.find(local_id) == state->transmittingHubsThisStep.end()) {
-							state->registerTransmission(local_id);
-						}
-
-						Flit flit = init[channel]->buffer_tx.Front();
-						if (GlobalParams::verbose_mode == VERBOSE_HIGH)
-						{
-							cout << "Hub " << local_id << " (neighbor) transmitting on channel "
-								 << channel << " (focused mode)" << endl;
-						}
-						
-						fuzzyTokenTransmissionThisStep[channel] = true;
-						init[channel]->start_request_event.notify();
-					}
-				}
-			}
+			// FIX: In FOCUSED mode, ONLY the token holder is allowed to transmit.
+			// The previous CSMA-like logic for neighbors caused collisions.
 		}
 	}
 	else
@@ -1202,10 +1133,10 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	}
 }
 
-void Hub::completeFuzzyTokenTransmission(int channel)
+void Hub::completeFuzzyTokenTransmission(int channel, int dst_id)
 {
 	if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-		cerr << "[COMPLETE-TX] Channel " << channel << endl;
+		cerr << "[COMPLETE-TX] Channel " << channel << " dst=" << dst_id << endl;
 	}
 	
 	if (fuzzyTokenNodes.find(channel) == fuzzyTokenNodes.end()) {
@@ -1231,10 +1162,10 @@ void Hub::completeFuzzyTokenTransmission(int channel)
 
 	// Transmission completed; apply deferred congestion if any
 	if (fuzzyTokenDeferredCongestion[channel]) {
-		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles);
+		controller.endStep(channel, OUTCOME_CONGESTION, transmission_cycles, dst_id);
 		fuzzyTokenDeferredCongestion[channel] = false; // consume the deferred flag
 	} else {
-		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles);
+		controller.endStep(channel, OUTCOME_SUCCESS, transmission_cycles, dst_id);
 	}
 	
 	// Reset step state for next transmission

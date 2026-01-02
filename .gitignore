@@ -3,7 +3,7 @@
 noxim
 .DS_Store
 .vscode
-results/*
-!results/
-!results/evaluate.ipynb
-ft_verification/**/output.csv
+*.csv
+*.png
+__pycache__/
+*.pyc

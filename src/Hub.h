@@ -203,7 +203,7 @@ SC_MODULE(Hub)
     int getID() { return local_id;}
     
     // Called by Initiator when TAIL flit is successfully transmitted
-    void completeFuzzyTokenTransmission(int channel);
+    void completeFuzzyTokenTransmission(int channel, int dst_id = -1);
     
     // Check if channel uses FUZZY_TOKEN MAC
     bool isFuzzyTokenChannel(int channel);

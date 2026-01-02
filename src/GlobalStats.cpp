@@ -511,6 +511,7 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
     out << "% Total received packets: " << getReceivedPackets() << endl;
     out << "% Total received flits: " << getReceivedFlits() << endl;
     out << "% Received/Ideal flits Ratio: " << getReceivedIdealFlitRatio() << endl;
+    out << "% Received/Injected flits Ratio: " << getReceivedInjectedFlitRatio() << endl;
     out << "% Average wireless utilization: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
     out << "% Global average delay (cycles): " << getAverageDelay() << endl;
     out << "% Max delay (cycles): " << getMaxDelay() << endl;
@@ -707,6 +708,24 @@ void GlobalStats::showBufferStats(std::ostream & out)
 
 }
 
+double GlobalStats::getInjectedFlits()
+{
+    double n = 0;
+    if (GlobalParams::topology == TOPOLOGY_MESH) 
+    {
+	for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
+	    for (int x = 0; x < GlobalParams::mesh_dim_x; x++) {
+		n += noc->t[x][y]->pe->getInjectedFlits();
+        }
+    }
+    else // other delta topologies
+    {
+	for (int y = 0; y < GlobalParams::n_delta_tiles; y++)
+	    n += noc->core[y]->pe->getInjectedFlits();
+    }
+    return n;
+}
+
 double GlobalStats::getReceivedIdealFlitRatio()
 {
     int total_cycles;
@@ -723,6 +742,13 @@ double GlobalStats::getReceivedIdealFlitRatio()
 		    GlobalParams::max_packet_size)/2 * total_cycles * GlobalParams::n_delta_tiles);
     }
     return ratio;
+}
+
+double GlobalStats::getReceivedInjectedFlitRatio()
+{
+    double injected = getInjectedFlits();
+    if (injected == 0.0) return 0.0;
+    return (double)getReceivedFlits() / injected;
 }
 
 void GlobalStats::showWiNoCStatsTokenPacket(std::ostream & out)

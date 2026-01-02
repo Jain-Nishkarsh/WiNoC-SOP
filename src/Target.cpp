@@ -20,7 +20,7 @@ void Target::b_transport( tlm::tlm_generic_payload& trans, sc_time& delay )
     total_wireless_rx_attempts++;
 
     LOG << "*** [Ch" <<local_id << "] Received: " << *my_flit << endl;
-    if (my_flit->flit_type == FLIT_TYPE_HEAD) {
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH && my_flit->flit_type == FLIT_TYPE_HEAD) {
         cerr << "[RX] Hub " << hub->local_id << " received HEAD flit on channel " << local_id 
              << " (src=" << my_flit->src_id << ", dst=" << my_flit->dst_id 
              << ", seq=" << my_flit->sequence_no << ") [RX attempt #" << total_wireless_rx_attempts << "]" << endl;
@@ -35,7 +35,7 @@ void Target::b_transport( tlm::tlm_generic_payload& trans, sc_time& delay )
         buffer_rx.Push(*my_flit);
         hub->power.antennaBufferPush();
         total_wireless_rx_success++;
-        if (my_flit->flit_type == FLIT_TYPE_HEAD) {
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH && my_flit->flit_type == FLIT_TYPE_HEAD) {
             cerr << "[RX-OK] Hub " << hub->local_id << " buffered HEAD flit (src=" << my_flit->src_id 
                  << ", dst=" << my_flit->dst_id << ", seq=" << my_flit->sequence_no 
                  << ") [Buffered #" << total_wireless_rx_success << "]" << endl;
@@ -50,9 +50,11 @@ void Target::b_transport( tlm::tlm_generic_payload& trans, sc_time& delay )
         // signaling to the Initiator that something went wrong
         total_wireless_rx_dropped++;
         LOG << "[Ch" <<local_id << "] WARNING: buffer_rx is full cannot store flit " << *my_flit << endl;
-        cerr << "[RX-DROP] Hub " << hub->local_id << " DROPPED flit (src=" << my_flit->src_id 
-             << ", dst=" << my_flit->dst_id << ", type=" << my_flit->flit_type 
-             << ", seq=" << my_flit->sequence_no << ") - buffer_rx FULL [Dropped #" << total_wireless_rx_dropped << "]" << endl;
+        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+            cerr << "[RX-DROP] Hub " << hub->local_id << " DROPPED flit (src=" << my_flit->src_id 
+                 << ", dst=" << my_flit->dst_id << ", type=" << my_flit->flit_type 
+                 << ", seq=" << my_flit->sequence_no << ") - buffer_rx FULL [Dropped #" << total_wireless_rx_dropped << "]" << endl;
+        }
     }
 }
 

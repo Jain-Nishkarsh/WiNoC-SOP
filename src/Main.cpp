@@ -68,7 +68,7 @@ int sc_main(int arg_num, char *arg_vet[])
         if (!GlobalParams::csv_mac_log_filename.empty()) {
             GlobalParams::csv_mac_log_stream.open(GlobalParams::csv_mac_log_filename.c_str());
             if (GlobalParams::csv_mac_log_stream.is_open()) {
-                GlobalParams::csv_mac_log_stream << "sim_cycle,channel_id,step_id,event_type,event_duration,token_id,period_mode,fa_size,fa_center,fa_nodes,fa_update,fa_old_size,fa_new_size,tx_attempt_nodes,tx_success_node,ready_nodes,ready_in_fa_nodes,nack_sent,nack_sender" << endl;
+                GlobalParams::csv_mac_log_stream << "sim_cycle,step_id,event_type,event_duration,current_token_holder,period_mode,fa_size,fa_nodes,tx_attempt_nodes,tx_success_node,ready_nodes,target_id,target_score,winner_success,winner_age" << endl;
                 cout << "CSV MAC Log enabled: " << GlobalParams::csv_mac_log_filename << endl;
             } else {
                 cerr << "Error opening CSV MAC log file: " << GlobalParams::csv_mac_log_filename << endl;
@@ -129,9 +129,22 @@ int sc_main(int arg_num, char *arg_vet[])
     reset.write(0);
     cout << " done! " << endl;
     cout << " Now running for " << GlobalParams:: simulation_time << " cycles..." << endl;
-    // fix clock periods different from 1ns
-    //sc_start(GlobalParams::simulation_time, SC_NS);
-    sc_start(GlobalParams::simulation_time * GlobalParams::clock_period_ps, SC_PS);
+    
+    // Simulation Loop with Heartbeat
+    int total_cycles = GlobalParams::simulation_time;
+    int cycles_per_step = 10000;
+    int cycles_done = 0;
+    
+    while (cycles_done < total_cycles) {
+        int cycles_to_run = std::min(cycles_per_step, total_cycles - cycles_done);
+        sc_start(cycles_to_run * GlobalParams::clock_period_ps, SC_PS);
+        cycles_done += cycles_to_run;
+        
+        float progress = (float)cycles_done / total_cycles * 100.0;
+        cout << "Progress: " << progress << "% (Cycle: " << cycles_done << ")" << endl;
+        
+        if (sc_get_status() == SC_STOPPED) break;
+    }
 
 
     // Close the simulation

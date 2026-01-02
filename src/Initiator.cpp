@@ -64,10 +64,12 @@ void Initiator::thread_process()
 	// Per-hub aggregated attempts
 	hub->tx_attempts_total++;
 		
-		cerr << "[INITIATOR-TX #" << total_wireless_tx_attempts << "] Hub " << hub->local_id 
-		     << " sending flit: type=" << flit_payload.flit_type 
-		     << ", src=" << flit_payload.src_id << ", dst=" << flit_payload.dst_id 
-		     << ", seq=" << flit_payload.sequence_no << " to Hub " << destHub << endl;
+		if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+			cerr << "[INITIATOR-TX #" << total_wireless_tx_attempts << "] Hub " << hub->local_id 
+			     << " sending flit: type=" << flit_payload.flit_type 
+			     << ", src=" << flit_payload.src_id << ", dst=" << flit_payload.dst_id 
+			     << ", seq=" << flit_payload.sequence_no << " to Hub " << destHub << endl;
+		}
 
 		trans->set_command(cmd);
 		trans->set_address(static_cast<const uint64>(destHub));
@@ -91,9 +93,11 @@ void Initiator::thread_process()
 		{
 			total_wireless_tx_success++;
 			hub->tx_success_total++;
-			cerr << "[TX-SUCCESS] Hub " << hub->local_id << " sent flit type=" << flit_payload.flit_type 
-			     << " (HEAD=" << FLIT_TYPE_HEAD << ", BODY=" << FLIT_TYPE_BODY << ", TAIL=" << FLIT_TYPE_TAIL << ")" << endl;
-			if (flit_payload.flit_type == FLIT_TYPE_HEAD) {
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+				cerr << "[TX-SUCCESS] Hub " << hub->local_id << " sent flit type=" << flit_payload.flit_type 
+				     << " (HEAD=" << FLIT_TYPE_HEAD << ", BODY=" << FLIT_TYPE_BODY << ", TAIL=" << FLIT_TYPE_TAIL << ")" << endl;
+			}
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH && flit_payload.flit_type == FLIT_TYPE_HEAD) {
 				cerr << "[TX-OK] Hub " << hub->local_id << " successfully sent HEAD flit (src=" << flit_payload.src_id 
 				     << ", dst=" << flit_payload.dst_id << ", seq=" << flit_payload.sequence_no 
 				     << ") [Success #" << total_wireless_tx_success << "]" << endl;
@@ -103,7 +107,9 @@ void Initiator::thread_process()
 
 			if (flit_payload.flit_type == FLIT_TYPE_HEAD) {
 				hub->transmission_in_progress.at(_channel_id) = true;
-				cerr << "[INITIATOR-HEAD] Hub " << hub->local_id << " set transmission_in_progress=true for channel " << _channel_id << endl;
+				if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+					cerr << "[INITIATOR-HEAD] Hub " << hub->local_id << " set transmission_in_progress=true for channel " << _channel_id << endl;
+				}
 			}
 
 			if (flit_payload.flit_type == FLIT_TYPE_TAIL)
@@ -118,9 +124,11 @@ void Initiator::thread_process()
 				// AIMD FIX: TAIL sent successfully = SUCCESS outcome
 				// For FUZZY_TOKEN, the winning transmitter ends the step regardless of token holder
 				if (hub->isFuzzyTokenChannel(_channel_id)) {
-					cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " successfully sent TAIL on channel " 
-						 << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
-					hub->completeFuzzyTokenTransmission(_channel_id);
+					if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+						cerr << "[AIMD-SUCCESS] Hub " << hub->local_id << " successfully sent TAIL on channel " 
+							 << _channel_id << ", calling endStep(OUTCOME_SUCCESS)" << endl;
+					}
+					hub->completeFuzzyTokenTransmission(_channel_id, destHub);
 				}
 			}
 		}
@@ -129,18 +137,22 @@ void Initiator::thread_process()
 			total_wireless_tx_errors++;
 			hub->tx_errors_total++;
 			LOG << " WARNING: incomplete transaction " << endl;
-			cerr << "[TX-ERROR] Hub " << hub->local_id << " FAILED to send flit (src=" << flit_payload.src_id 
-			     << ", dst=" << flit_payload.dst_id << ", type=" << flit_payload.flit_type 
-			     << ", seq=" << flit_payload.sequence_no << ") to Hub " << destHub 
-			     << " [Error #" << total_wireless_tx_errors << "]" << endl;
+			if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+				cerr << "[TX-ERROR] Hub " << hub->local_id << " FAILED to send flit (src=" << flit_payload.src_id 
+				     << ", dst=" << flit_payload.dst_id << ", type=" << flit_payload.flit_type 
+				     << ", seq=" << flit_payload.sequence_no << ") to Hub " << destHub 
+				     << " [Error #" << total_wireless_tx_errors << "]" << endl;
+			}
 			
 			// IMPORTANT: TX-ERROR means receiver buffer overflow, NOT MAC collision!
 			// Do NOT treat as AIMD collision - the channel itself is not congested
 			// The wireless channel worked fine - just receiver buffer was full
 			// Treat as SILENCE so FA doesn't shrink unnecessarily
 			if (hub->isFuzzyTokenChannel(_channel_id)) {
-				cerr << "[BUFFER-OVERFLOW] Hub " << hub->local_id << " detected buffer overflow (not MAC collision) on channel " 
-					 << _channel_id << " - ending step as SILENCE" << endl;
+				if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+					cerr << "[BUFFER-OVERFLOW] Hub " << hub->local_id << " detected buffer overflow (not MAC collision) on channel " 
+						 << _channel_id << " - ending step as SILENCE" << endl;
+				}
 				hub->handleBufferOverflow(_channel_id);
 			}
 		}

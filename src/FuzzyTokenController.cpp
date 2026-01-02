@@ -66,6 +66,23 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
         cout << "FuzzyTokenChannelState initialized: numNodes=" << numNodes 
              << ", FA_size=" << FA_size << ", tokenID=" << tokenID << endl;
     }
+
+    // Initialize SHT
+    sht.resize(numNodes);
+    nodeToIndex.clear();
+    for(int i=0; i<numNodes; i++) {
+        nodeToIndex[nodeIds[i]] = i;
+        sht[i].success_score = 0.0;
+        sht[i].last_visit_cycle = 0;
+    }
+    last_smoothing_cycle = 0;
+    tenure_cycles_remaining = 0;
+    
+    // Initialize SWJ debug metrics
+    last_swj_score = 0.0;
+    last_swj_success = 0.0;
+    last_swj_age = 0;
+    last_swj_target = -1;
 }
 
 void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
@@ -79,9 +96,6 @@ void FuzzyTokenChannelState::updateFuzzyArea(StepOutcome outcome) {
             break;
             
         case OUTCOME_CONGESTION:
-            // FA_size = (int)ceil(FA_size * config.FA_decrement_factor);
-            // if (FA_size < 1) FA_size = 1;
-            // else totalCongestions++;
             totalCongestions++;
             break;
             
@@ -210,6 +224,165 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     updateTransmissionProbabilities();
 }
 
+void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id, int dst_id) {
+    double alpha = config.alpha;
+    int dimX = GlobalParams::mesh_dim_x;
+
+    // 1. Global Decay
+    for (int i = 0; i < sht.size(); i++) {
+        sht[i].success_score *= (1.0 - alpha);
+        if (sht[i].success_score < 0.001) sht[i].success_score = 0;
+    }
+
+    // 2. Rewards (Spatial Halo)
+    if (outcome == OUTCOME_SUCCESS && source_id != -1) {
+        // Set Tenure Lock
+        tenure_cycles_remaining = config.tenure_lock_cycles;
+
+        // Source Reward
+        if (nodeToIndex.count(source_id)) {
+            sht[nodeToIndex[source_id]].success_score += alpha * 1.0;
+        }
+
+        // Destination Reward
+        if (dst_id != -1 && nodeToIndex.count(dst_id)) {
+            sht[nodeToIndex[dst_id]].success_score += alpha * 0.5;
+        }
+
+        // Neighbor Rewards
+        for (int i = 0; i < numNodes; i++) {
+            int nodeId = tokenRingOrder[i];
+            if (nodeId == source_id || nodeId == dst_id) continue;
+            if (!nodeToIndex.count(nodeId)) continue;
+
+            int x_i = nodeId % dimX;
+            int y_i = nodeId / dimX;
+
+            bool is_neighbor = false;
+
+            // Check distance to Source
+            int x_src = source_id % dimX;
+            int y_src = source_id / dimX;
+            if (std::abs(x_i - x_src) + std::abs(y_i - y_src) == 1) is_neighbor = true;
+
+            // Check distance to Dest
+            if (!is_neighbor && dst_id != -1) {
+                int x_dst = dst_id % dimX;
+                int y_dst = dst_id / dimX;
+                if (std::abs(x_i - x_dst) + std::abs(y_i - y_dst) == 1) is_neighbor = true;
+            }
+
+            if (is_neighbor) {
+                sht[nodeToIndex[nodeId]].success_score += alpha * 0.2;
+            }
+        }
+    }
+}
+
+void FuzzyTokenChannelState::advanceTokenSWJ() {
+    // Phase 2: The Heuristic Score & Jump Target
+    
+    // 0. Tenure Lock Check
+    if (tenure_cycles_remaining > 0) {
+        tenure_cycles_remaining--;
+        // Token stays at current node
+        last_swj_target = tokenID;
+        // Just for logging, we can keep the last score or set to 0
+        return; 
+    }
+
+    // Current cycle T
+    uint64_t T = step_start_cycle + currentStepCycles;
+
+    // Update last_visit_cycle for the current token holder
+    if (nodeToIndex.count(tokenID)) {
+        sht[nodeToIndex[tokenID]].last_visit_cycle = T;
+    }
+
+    // Weights (Priority Scoring)
+    double Ws = config.Ws; // Weight for success (exploitation)
+    double Wa = config.Wa;  // Weight for age (exploration)
+    double H_threshold = config.H_threshold; // Stability threshold
+
+    // 1. Calculate Score for Current Holder (Stability Score)
+    double current_holder_score = 0.0;
+    if (nodeToIndex.count(tokenID)) {
+        int idx = nodeToIndex[tokenID];
+        // Age is effectively 0 for current holder
+        current_holder_score = Ws * sht[idx].success_score; 
+    }
+
+    // 2. Find the best node in the rest of the chip (The Challenger)
+    int challenger_id = -1;
+    double max_challenger_score = -1.0;
+
+    for (int i = 0; i < numNodes; i++) {
+        int nodeId = tokenRingOrder[i];
+        if (nodeId == tokenID) continue; // Skip current holder
+        if (nodeToIndex.find(nodeId) == nodeToIndex.end()) continue;
+        
+        int idx = nodeToIndex[nodeId];
+        
+        double exploitation = sht[idx].success_score;
+        uint64_t age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+        double exploration = Wa * std::sqrt((double)age);
+        
+        double score = Ws * exploitation + exploration;
+        
+        if (score > max_challenger_score) {
+            max_challenger_score = score;
+            challenger_id = nodeId;
+        } else if (score == max_challenger_score) {
+             // Tie-Breaking: lowest ID
+            if (challenger_id == -1 || nodeId < challenger_id) {
+                challenger_id = nodeId;
+            }
+        }
+    }
+
+    // 3. The Hysteresis Decision
+    int next_token_holder = tokenID;
+    double winning_score = current_holder_score;
+
+    if (challenger_id != -1 && max_challenger_score > (current_holder_score + H_threshold)) {
+        next_token_holder = challenger_id;
+        winning_score = max_challenger_score;
+    }
+
+    // Store debug metrics
+    last_swj_score = winning_score;
+    last_swj_target = next_token_holder;
+    if (next_token_holder != -1 && nodeToIndex.count(next_token_holder)) {
+        int idx = nodeToIndex[next_token_holder];
+        last_swj_success = sht[idx].success_score;
+        last_swj_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+    } else {
+        last_swj_success = 0.0;
+        last_swj_age = 0;
+    }
+    
+    int oldTokenID = tokenID;
+    
+    if (next_token_holder != tokenID) {
+        // Find position of next_token_holder in tokenRingOrder
+        for(int i=0; i<tokenRingOrder.size(); ++i) {
+            if (tokenRingOrder[i] == next_token_holder) {
+                tokenRingPosition = i;
+                break;
+            }
+        }
+        tokenID = next_token_holder;
+    }
+    // Else: Stay put, tokenRingPosition remains same
+    
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH && oldTokenID != tokenID) {
+        cout << "[SWJ-JUMP] " << oldTokenID << " -> " << tokenID << " (Score: " << winning_score << ")" << endl;
+    }
+    
+    rebuildFuzzyArea();
+    updateTransmissionProbabilities();
+}
+
 void FuzzyTokenChannelState::switchMode(StepOutcome outcome) {
     double thr1_value = config.thr_is_percentage ? ceil(config.thr1 * numNodes) : config.thr1;
     double thr2_value = config.thr_is_percentage ? floor(config.thr2 * numNodes) : config.thr2;
@@ -306,7 +479,7 @@ FuzzyTokenChannelState* FuzzyTokenController::getChannelState(int channelId) {
     return channelStates[channelId];
 }
 
-void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepCycles) {
+void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepCycles, int dst_id) {
     FuzzyTokenChannelState* state = getChannelState(channelId);
     if (!state) return;
     
@@ -324,22 +497,19 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     
     // 1. Capture Pre-Update State
     int fa_old_size = state->FA_size;
+    int current_holder = state->tokenID;
+    FuzzyTokenMode mode_before_update = state->periodMode;
     
     // Construct Node Lists (FA and Ready) BEFORE update
     stringstream fa_nodes_ss;
-    bool first = true;
     for(int i=0; i<state->numNodes; ++i) {
-        if(state->isInFuzzyArea(i)) {
-            if(!first) fa_nodes_ss << "|";
-            fa_nodes_ss << i;
-            first = false;
-        }
+        fa_nodes_ss << (state->isInFuzzyArea(i) ? "1" : "0");
     }
     string fa_nodes = fa_nodes_ss.str();
     if (fa_nodes.empty()) fa_nodes = "-";
 
     stringstream tx_attempt_ss;
-    first = true;
+    bool first = true;
     int success_node = -1;
     for(int node : state->transmittingHubsThisStep) {
         if(!first) tx_attempt_ss << "|";
@@ -351,70 +521,15 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     if (tx_attempt_nodes.empty()) tx_attempt_nodes = "-";
 
     stringstream ready_nodes_ss;
-    stringstream ready_in_fa_ss;
-    first = true;
-    bool first_fa = true;
     for(int i=0; i<state->numNodes; ++i) {
-        if(state->isHubReady(i)) {
-            if(!first) ready_nodes_ss << "|";
-            ready_nodes_ss << i;
-            first = false;
-
-            if(state->isInFuzzyArea(i)) {
-                if(!first_fa) ready_in_fa_ss << "|";
-                ready_in_fa_ss << i;
-                first_fa = false;
-            }
-        }
+        ready_nodes_ss << (state->isHubReady(i) ? "1" : "0");
     }
     string ready_nodes = ready_nodes_ss.str();
     if (ready_nodes.empty()) ready_nodes = "-";
-    string ready_in_fa_nodes = ready_in_fa_ss.str();
-    if (ready_in_fa_nodes.empty()) ready_in_fa_nodes = "-";
 
     // 2. Update State
     // Always update FA_size to track contention (needed for baseline FUZZY_TOKEN mode switching)
     state->updateFuzzyArea(outcome);
-    int fa_new_size = state->FA_size;
-
-    // 3. Determine Update Type
-    string fa_update = "NONE";
-    if (fa_new_size > fa_old_size) fa_update = "INC";
-    else if (fa_new_size < fa_old_size) fa_update = "DEC";
-
-    // 4. NACK Logic
-    int nack_sent = (outcome == OUTCOME_COLLISION) ? 1 : 0;
-    int nack_sender = (outcome == OUTCOME_COLLISION) ? state->tokenID : -1;
-
-    // 5. Log to CSV
-    if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
-        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
-                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
-                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
-        const char* mode_str = (state->periodMode == FUZZY_MODE) ? "FUZZY" : "FOCUSED";
-        
-        GlobalParams::csv_mac_log_stream 
-            << state->step_start_cycle << ","
-            << state->channelID << ","
-            << state->step_id << ","
-            << outcome_str << ","
-            << stepCycles << ","
-            << state->tokenID << ","
-            << mode_str << ","
-            << fa_old_size << ","
-            << state->tokenID << ","
-            << fa_nodes << ","
-            << fa_update << ","
-            << fa_old_size << ","
-            << fa_new_size << ","
-            << tx_attempt_nodes << ","
-            << success_node << ","
-            << ready_nodes << ","
-            << ready_in_fa_nodes << ","
-            << nack_sent << ","
-            << nack_sender
-            << endl;
-    }
     
     // Increment Step ID
     state->step_id++;
@@ -429,35 +544,100 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
         state->totalFocusedSteps++;
     }
     
+    // Update currentStepCycles BEFORE SWJ logic to ensure correct age calculation
+    state->currentStepCycles = stepCycles;
+
     bool useJumpFeatures = (state->macPolicy == FUZZY_RAJ);
     bool usePlusFeatures = (state->macPolicy == FUZZY_RCT || state->macPolicy == FUZZY_RAJ);
+    bool useSWJ = (state->macPolicy == FUZZY_SWJ);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
-    if (useJumpFeatures && inFocusedMode) {
+    if (useSWJ) {
+        int success_node_for_sht = -1;
+        if (outcome == OUTCOME_SUCCESS) {
+             if (state->transmittingHubsThisStep.size() == 1) {
+                 success_node_for_sht = *state->transmittingHubsThisStep.begin();
+             }
+        }
+        state->updateSHT(outcome, success_node_for_sht, dst_id);
+        state->advanceTokenSWJ();
+        state->switchMode(outcome);
+    } else if (useJumpFeatures && inFocusedMode) {
         state->advanceTokenSmart();
     } else {
         state->advanceToken();
     }
     
-    if (!usePlusFeatures) {
+    if (!usePlusFeatures && !useSWJ) {
         state->switchMode(outcome);
+    }
+
+    // 3. Log to CSV (Moved to end to capture next token state)
+    if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
+        const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 
+                                  (outcome == OUTCOME_CONGESTION) ? "CONGESTION" : 
+                                  (outcome == OUTCOME_SUCCESS) ? "SUCCESS" : "SILENCE";
+        const char* mode_str = (mode_before_update == FUZZY_MODE) ? "FUZZY" : "FOCUSED";
+        
+        GlobalParams::csv_mac_log_stream 
+            << state->step_start_cycle << ","
+            << state->step_id - 1 << "," // Use previous step ID as we incremented it
+            << outcome_str << ","
+            << stepCycles << ","
+            << current_holder << ","
+            << mode_str << ","
+            << fa_old_size << ","
+            << fa_nodes << ","
+            << tx_attempt_nodes << ","
+            << success_node << ","
+            << ready_nodes << ","
+            << state->last_swj_target << ","
+            << state->last_swj_score << ","
+            << state->last_swj_success << ","
+            << state->last_swj_age
+            << endl;
     }
     
     state->resetStepState();
     state->resetReadyBitmap();
-    state->currentStepCycles = stepCycles;
 }
 
 void FuzzyTokenChannelState::rebuildFuzzyArea() {
     fuzzyArea.reset();
     if (numNodes <= 0 || tokenRingOrder.empty()) return;
-    int n = (int)tokenRingOrder.size();
-    int center = tokenRingPosition;
-    int half = FA_size / 2;
-    for (int k = -half; k < -half + FA_size; ++k) {
-        int idx = (center + k + n) % n;
-        int nodeId = tokenRingOrder[idx];
-        fuzzyArea.set(nodeId);
+
+    if (macPolicy == FUZZY_SWJ) {
+        // Blob FA Logic (Manhattan Distance)
+        int dimX = GlobalParams::mesh_dim_x;
+        // int dimY = GlobalParams::mesh_dim_y; // Unused
+        
+        int x_token = tokenID % dimX;
+        int y_token = tokenID / dimX;
+        
+        // Calculate radius based on FA_size (Area ~ 2*r^2)
+        // r = sqrt(FA_size / 2)
+        int radius = (int)std::sqrt(FA_size / 2.0);
+        
+        for (int i = 0; i < numNodes; i++) {
+            int x_i = i % dimX;
+            int y_i = i / dimX;
+            
+            int dist = std::abs(x_token - x_i) + std::abs(y_token - y_i);
+            
+            if (dist <= radius) {
+                fuzzyArea.set(i);
+            }
+        }
+    } else {
+        // Original Ring Logic
+        int n = (int)tokenRingOrder.size();
+        int center = tokenRingPosition;
+        int half = FA_size / 2;
+        for (int k = -half; k < -half + FA_size; ++k) {
+            int idx = (center + k + n) % n;
+            int nodeId = tokenRingOrder[idx];
+            fuzzyArea.set(nodeId);
+        }
     }
 }
 
@@ -533,11 +713,6 @@ void FuzzyTokenChannelState::resetStepState() {
 // Ready bitmap management implementations
 void FuzzyTokenChannelState::setHubReady(int hubId, bool isReady) {
     cerr << "ERROR: setHubReady called outside control minislot! This function is deprecated." << endl;
-    /*
-    if (hubId >= 0 && hubId < numNodes) {
-        ready_bitmap[hubId] = isReady;
-    }
-    */
 }
 
 bool FuzzyTokenChannelState::isHubReady(int hubId) const {
