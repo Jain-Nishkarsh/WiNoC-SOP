@@ -67,16 +67,18 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
              << ", FA_size=" << FA_size << ", tokenID=" << tokenID << endl;
     }
 
-    // Initialize SHT
-    sht.resize(numNodes);
+    // Initialize SRT
+    srt.resize(numNodes);
     nodeToIndex.clear();
     for(int i=0; i<numNodes; i++) {
         nodeToIndex[nodeIds[i]] = i;
-        sht[i].success_score = 0.0;
-        sht[i].last_visit_cycle = 0;
+        srt[i].success_score = 0.0;
+        srt[i].last_visit_cycle = 0;
+        srt[i].ready_bit = false;
     }
     last_smoothing_cycle = 0;
     tenure_cycles_remaining = 0;
+    last_successful_hub = -1;
     
     // Initialize SWJ debug metrics
     last_swj_score = 0.0;
@@ -196,27 +198,79 @@ int FuzzyTokenChannelState::findNextReadyToken(int currentPos) const {
 }
 
 void FuzzyTokenChannelState::advanceTokenSmart() {
-    int oldPosition = tokenRingPosition;
-    int nextReadyPos = findNextReadyToken(tokenRingPosition);
+    uint64_t current_cycle = step_start_cycle + currentStepCycles;
+
+    // Update last_visit_cycle for current holder
+    if (nodeToIndex.count(tokenID)) {
+        srt[nodeToIndex[tokenID]].last_visit_cycle = current_cycle;
+    }
+
+    int next_holder = -1;
+    double max_score = -1.0;
     
-    if (nextReadyPos == -1) {
-        // No ready hub found, advance sequentially
+    // Calculate Scores
+    for (int i = 0; i < numNodes; i++) {
+        int nodeId = tokenRingOrder[i];
+        if (!nodeToIndex.count(nodeId)) continue;
+        
+        SRTEntry& entry = srt[nodeToIndex[nodeId]];
+        
+        // Gating: If ready_bits[i] is 0, the score Psi_i must be 0.
+        if (!entry.ready_bit) continue;
+        
+        // Age Calculation (Cycles)
+        uint64_t age = current_cycle - entry.last_visit_cycle;
+        
+        // Formula: Psi = [(Success * Ws) + (Age * Wa)] * Ready_Bit
+        double psi = (entry.success_score * config.Ws) + (age * config.Wa);
+        
+        if (psi > max_score) {
+            max_score = psi;
+            next_holder = nodeId;
+        }
+    }
+    
+    if (next_holder == -1) {
+        // Fallback: Sequential search
         tokenRingPosition = (tokenRingPosition + 1) % tokenRingOrder.size();
         tokenID = tokenRingOrder[tokenRingPosition];
+        
+        // Update debug metrics for fallback
+        last_swj_target = tokenID;
+        last_swj_score = 0.0;
+        if (nodeToIndex.count(tokenID)) {
+             int idx = nodeToIndex[tokenID];
+             last_swj_success = srt[idx].success_score;
+             last_swj_age = current_cycle - srt[idx].last_visit_cycle;
+        } else {
+             last_swj_success = 0.0;
+             last_swj_age = 0;
+        }
     } else {
-        // Ready-Aware Jump: Always jump to the next ready node in FOCUSED mode
-        // No cooldown logic (C_jump) applied here, as per design requirements.
-        tokenRingPosition = nextReadyPos;
-        tokenID = tokenRingOrder[tokenRingPosition];
+        // Jump
+        tokenID = next_holder;
+        // Update position
+        for(int i=0; i<tokenRingOrder.size(); ++i) {
+            if (tokenRingOrder[i] == tokenID) {
+                tokenRingPosition = i;
+                break;
+            }
+        }
+        
+        // Update debug metrics for jump
+        last_swj_target = tokenID;
+        last_swj_score = max_score;
+        if (nodeToIndex.count(tokenID)) {
+             int idx = nodeToIndex[tokenID];
+             last_swj_success = srt[idx].success_score;
+             last_swj_age = current_cycle - srt[idx].last_visit_cycle;
+        } else {
+             last_swj_success = 0.0;
+             last_swj_age = 0;
+        }
         
         if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-            int skipped = (nextReadyPos > oldPosition) ? 
-                            nextReadyPos - oldPosition - 1 : 
-                            tokenRingOrder.size() - oldPosition + nextReadyPos - 1;
-            if (skipped > 0) {
-                cerr << "[TOKEN-JUMP] " << tokenRingOrder[oldPosition] << " → " << tokenID 
-                        << " (skipped " << skipped << " hubs)" << endl;
-            }
+             cerr << "[TOKEN-JUMP] -> " << tokenID << " (Score: " << max_score << ")" << endl;
         }
     }
     
@@ -224,56 +278,36 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
     updateTransmissionProbabilities();
 }
 
-void FuzzyTokenChannelState::updateSHT(StepOutcome outcome, int source_id, int dst_id) {
+void FuzzyTokenChannelState::updateSRT(StepOutcome outcome, int source_id, int dst_id) {
     double alpha = config.alpha;
     int dimX = GlobalParams::mesh_dim_x;
 
     // 1. Global Decay
-    for (int i = 0; i < sht.size(); i++) {
-        sht[i].success_score *= (1.0 - alpha);
-        if (sht[i].success_score < 0.001) sht[i].success_score = 0;
+    for (auto& entry : srt) {
+        entry.success_score *= (1.0 - alpha);
+        if (entry.success_score < 0.001) entry.success_score = 0;
     }
 
-    // 2. Rewards (Spatial Halo)
+    // 2. Update Success Score & Last Successful Hub
     if (outcome == OUTCOME_SUCCESS && source_id != -1) {
-        // Set Tenure Lock
-        tenure_cycles_remaining = config.tenure_lock_cycles;
-
-        // Source Reward
+        last_successful_hub = source_id;
         if (nodeToIndex.count(source_id)) {
-            sht[nodeToIndex[source_id]].success_score += alpha * 1.0;
+            srt[nodeToIndex[source_id]].success_score += alpha * 1.0;
         }
-
-        // Destination Reward
-        if (dst_id != -1 && nodeToIndex.count(dst_id)) {
-            sht[nodeToIndex[dst_id]].success_score += alpha * 0.5;
-        }
-
-        // Neighbor Rewards
+        
+        // Neighbor Rewards (Spatial Halo)
         for (int i = 0; i < numNodes; i++) {
             int nodeId = tokenRingOrder[i];
-            if (nodeId == source_id || nodeId == dst_id) continue;
+            if (nodeId == source_id) continue;
             if (!nodeToIndex.count(nodeId)) continue;
 
             int x_i = nodeId % dimX;
             int y_i = nodeId / dimX;
-
-            bool is_neighbor = false;
-
-            // Check distance to Source
             int x_src = source_id % dimX;
             int y_src = source_id / dimX;
-            if (std::abs(x_i - x_src) + std::abs(y_i - y_src) == 1) is_neighbor = true;
-
-            // Check distance to Dest
-            if (!is_neighbor && dst_id != -1) {
-                int x_dst = dst_id % dimX;
-                int y_dst = dst_id / dimX;
-                if (std::abs(x_i - x_dst) + std::abs(y_i - y_dst) == 1) is_neighbor = true;
-            }
-
-            if (is_neighbor) {
-                sht[nodeToIndex[nodeId]].success_score += alpha * 0.2;
+            
+            if (std::abs(x_i - x_src) + std::abs(y_i - y_src) == 1) {
+                srt[nodeToIndex[nodeId]].success_score += alpha * 0.2;
             }
         }
     }
@@ -296,7 +330,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
 
     // Update last_visit_cycle for the current token holder
     if (nodeToIndex.count(tokenID)) {
-        sht[nodeToIndex[tokenID]].last_visit_cycle = T;
+        srt[nodeToIndex[tokenID]].last_visit_cycle = T;
     }
 
     // Weights (Priority Scoring)
@@ -309,7 +343,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     if (nodeToIndex.count(tokenID)) {
         int idx = nodeToIndex[tokenID];
         // Age is effectively 0 for current holder
-        current_holder_score = Ws * sht[idx].success_score; 
+        current_holder_score = Ws * srt[idx].success_score; 
     }
 
     // 2. Find the best node in the rest of the chip (The Challenger)
@@ -323,8 +357,8 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         
         int idx = nodeToIndex[nodeId];
         
-        double exploitation = sht[idx].success_score;
-        uint64_t age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+        double exploitation = srt[idx].success_score;
+        uint64_t age = T - srt[idx].last_visit_cycle;
         double exploration = Wa * std::sqrt((double)age);
         
         double score = Ws * exploitation + exploration;
@@ -354,8 +388,8 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     last_swj_target = next_token_holder;
     if (next_token_holder != -1 && nodeToIndex.count(next_token_holder)) {
         int idx = nodeToIndex[next_token_holder];
-        last_swj_success = sht[idx].success_score;
-        last_swj_age = (T > sht[idx].last_visit_cycle) ? (T - sht[idx].last_visit_cycle) : 0;
+        last_swj_success = srt[idx].success_score;
+        last_swj_age = T - srt[idx].last_visit_cycle;
     } else {
         last_swj_success = 0.0;
         last_swj_age = 0;
@@ -422,8 +456,11 @@ void FuzzyTokenChannelState::registerHub(Hub* hub) {
 void FuzzyTokenChannelState::perform_control_minislot(int currentCycle, bool enable_polling) {
     if (lastControlStepCycle == currentCycle) return;
 
-    // Reset ready bitmap
+    // Reset ready bitmap and SRT ready bits
     fill(ready_bitmap.begin(), ready_bitmap.end(), false);
+    for(auto& entry : srt) {
+        entry.ready_bit = false;
+    }
     
     int readyCount = 0;
     
@@ -434,13 +471,12 @@ void FuzzyTokenChannelState::perform_control_minislot(int currentCycle, bool ena
             if (hub->init.find(channelID) != hub->init.end()) {
                  if (!hub->init[channelID]->buffer_tx.IsEmpty()) {
                      int hubID = hub->local_id;
-                     // Find index in tokenRingOrder
-                     for(int i=0; i<tokenRingOrder.size(); ++i) {
-                         if (tokenRingOrder[i] == hubID) {
-                             ready_bitmap[i] = true;
-                             readyCount++;
-                             break;
-                         }
+                     // Use nodeToIndex for O(1) lookup
+                     if (nodeToIndex.count(hubID)) {
+                         int idx = nodeToIndex[hubID];
+                         ready_bitmap[idx] = true;
+                         srt[idx].ready_bit = true;
+                         readyCount++;
                      }
                  }
             }
@@ -552,26 +588,32 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     bool useSWJ = (state->macPolicy == FUZZY_SWJ);
     bool inFocusedMode = (state->periodMode == FOCUSED_MODE);
     
-    if (useSWJ) {
-        int success_node_for_sht = -1;
+    // Update SRT for RAJ and SWJ
+    if (useSWJ || useJumpFeatures) {
+        int success_node = -1;
         if (outcome == OUTCOME_SUCCESS) {
              if (state->transmittingHubsThisStep.size() == 1) {
-                 success_node_for_sht = *state->transmittingHubsThisStep.begin();
+                 success_node = *state->transmittingHubsThisStep.begin();
              }
         }
-        state->updateSHT(outcome, success_node_for_sht, dst_id);
+        state->updateSRT(outcome, success_node, dst_id);
+    }
+
+    if (useSWJ) {
         state->advanceTokenSWJ();
         state->switchMode(outcome);
     } else if (useJumpFeatures && inFocusedMode) {
         state->advanceTokenSmart();
+        state->switchMode(outcome);
     } else {
         state->advanceToken();
+        // Only skip switchMode if using RCT (which handles it proactively)
+        // RAJ now uses standard switchMode
+        if (state->macPolicy != FUZZY_RCT) {
+            state->switchMode(outcome);
+        }
     }
     
-    if (!usePlusFeatures && !useSWJ) {
-        state->switchMode(outcome);
-    }
-
     // 3. Log to CSV (Moved to end to capture next token state)
     if (GlobalParams::csv_log_enabled && GlobalParams::csv_mac_log_stream.is_open()) {
         const char* outcome_str = (outcome == OUTCOME_COLLISION) ? "COLLISION" : 

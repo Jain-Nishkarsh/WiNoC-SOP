@@ -865,6 +865,11 @@ void Hub::txRadioProcessFuzzyToken(int channel)
         node->resetStepState();
     }
 
+    // Stall for control minislot duration
+    if (step_duration < state->config.control_minislot_delay) {
+        return;
+    }
+
 	bool hasPacketToSend = !init[channel]->buffer_tx.IsEmpty();
 	
 	if (usePlusFeatures && node->isTokenHolder()) {
@@ -873,7 +878,9 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		// Update history only once per cycle (token holder coordinates)
 		if (current_cycle != last_history_update_cycle) {
 			state->updateReadyHistory();
-			state->checkAndSwitchModeProactive();
+            if (macPolicy == FUZZY_RCT) {
+			    state->checkAndSwitchModeProactive();
+            }
 			last_history_update_cycle = current_cycle;
 		}
 	}
@@ -942,6 +949,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 	// Paper timing: silence=1 cycle (no preambles), collision=2 cycles (preamble+NACK)
     int check_cycle = state->config.preamble_cycles;
     if (!usePlusFeatures) check_cycle = std::max(0, check_cycle - 1);
+    check_cycle += state->config.control_minislot_delay;
 
 	if (state->getMode() == FUZZY_MODE && node->isTokenHolder() && step_duration >= check_cycle) {
 		if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
@@ -951,7 +959,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 		int active_count = state->getActiveTransmitters();
 		
 		if (active_count == 0) {
-			int step_cycles = state->config.preamble_cycles;
+			int step_cycles = state->config.preamble_cycles + state->config.control_minislot_delay;
 			controller.endStep(channel, OUTCOME_SILENCE, step_cycles);
 			
 			fuzzyTokenStepStartCycle[channel] = current_cycle + 1;
@@ -968,7 +976,7 @@ void Hub::txRadioProcessFuzzyToken(int channel)
 			if (current_cycle != last_collision_cycle) {
 				last_collision_cycle = current_cycle;
 				
-				int step_cycles = state->config.preamble_cycles + 1;
+				int step_cycles = state->config.preamble_cycles + 1 + state->config.control_minislot_delay;
 				controller.endStep(channel, OUTCOME_COLLISION, step_cycles);
 				
 				// Start new step immediately with reduced FA

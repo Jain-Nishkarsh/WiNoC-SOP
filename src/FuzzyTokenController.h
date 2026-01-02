@@ -38,8 +38,9 @@ enum StepOutcome {
     OUTCOME_CONGESTION
 };
 
-struct HistoryEntry {
+struct SRTEntry {
     double success_score;      // EMA of SUCCESS outcomes (Exploitation)
+    bool ready_bit;            // Ready status (updated every cycle from Global Pulse)
     uint64_t last_visit_cycle; // Cycle when this node last held the token (Exploration)
 };
 
@@ -167,11 +168,12 @@ public:
     int findNextReadyToken(int startPos) const;
     void advanceTokenSmart();
 
-    // SWJ (Success-Weighted Jump)
-    vector<HistoryEntry> sht;
+    // SRT (Success & Readiness Table)
+    vector<SRTEntry> srt;
     map<int, int> nodeToIndex;
     int last_smoothing_cycle;
     int tenure_cycles_remaining; // Tenure Lock
+    int last_successful_hub;     // ID of the last hub to successfully transmit
     
     // Debug metrics for SWJ
     double last_swj_score;
@@ -179,7 +181,7 @@ public:
     uint64_t last_swj_age;
     int last_swj_target;
 
-    void updateSHT(StepOutcome outcome, int source_id, int dst_id = -1);
+    void updateSRT(StepOutcome outcome, int source_id, int dst_id = -1);
     void advanceTokenSWJ();
 };
 

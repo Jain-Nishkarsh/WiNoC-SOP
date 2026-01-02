@@ -106,8 +106,8 @@ RadioChannels:
         mac_policy: [FUZZY_SWJ]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.3
-            thr2: 0.6
+            thr1: 0.35
+            thr2: 0.7
             thr_is_percentage: true
 
             initial_FA: 16
@@ -121,7 +121,7 @@ RadioChannels:
             token_order: static
 
             Ws: 10
-            Wa: 10
+            Wa: 0.5
             H_threshold: 5
             alpha: 0.1
             tenure_lock_cycles: 1
@@ -134,7 +134,7 @@ stats_warm_up_time: 1000
 min_packet_size: 3
 max_packet_size: 3
 packet_injection_rate: 0.01
-probability_of_retransmission: 0.01
+probability_of_retransmission: 0
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 
@@ -149,6 +149,6 @@ max_volume_to_be_drained: 0
 show_buffer_stats: false
 
 # CSV Logging
-csv_log_enabled: true
+csv_log_enabled: false
 csv_routing_log_filename: ""
 csv_mac_log_filename: "swj_random.csv"

@@ -130,6 +130,7 @@ typedef struct {
     double H_threshold;         // Stability threshold (default: 5.0)
     double alpha;               // Decay factor for SHT (default: 0.05)
     int tenure_lock_cycles;     // Tenure lock duration (default: 5)
+    int control_minislot_delay; // Cycles to stall for control minislot (default: 0)
 } FuzzyTokenConfig;
 
 typedef struct {

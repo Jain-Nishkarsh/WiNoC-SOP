@@ -94,6 +94,7 @@ namespace YAML {
             config.H_threshold = node["H_threshold"].as<double>(5.0);
             config.alpha = node["alpha"].as<double>(0.05);
             config.tenure_lock_cycles = node["tenure_lock_cycles"].as<int>(5);
+            config.control_minislot_delay = node["control_minislot_delay"].as<int>(0);
 
             return true;
         }
