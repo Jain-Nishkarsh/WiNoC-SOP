@@ -41,7 +41,7 @@ enum StepOutcome {
 struct SRTEntry {
     double success_score;      // EMA of SUCCESS outcomes (Exploitation)
     bool ready_bit;            // Ready status (updated every cycle from Global Pulse)
-    uint64_t last_visit_cycle; // Cycle when this node last held the token (Exploration)
+    uint64_t last_visit_step;  // Step when this node last held the token (Exploration)
 };
 
 struct Hub;

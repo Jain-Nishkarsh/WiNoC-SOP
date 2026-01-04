@@ -73,7 +73,7 @@ void FuzzyTokenChannelState::initialize(const FuzzyTokenConfig& cfg, int num_nod
     for(int i=0; i<numNodes; i++) {
         nodeToIndex[nodeIds[i]] = i;
         srt[i].success_score = 0.0;
-        srt[i].last_visit_cycle = 0;
+        srt[i].last_visit_step = 0;
         srt[i].ready_bit = false;
     }
     last_smoothing_cycle = 0;
@@ -198,11 +198,9 @@ int FuzzyTokenChannelState::findNextReadyToken(int currentPos) const {
 }
 
 void FuzzyTokenChannelState::advanceTokenSmart() {
-    uint64_t current_cycle = step_start_cycle + currentStepCycles;
-
-    // Update last_visit_cycle for current holder
+    // Update last_visit_step for current holder
     if (nodeToIndex.count(tokenID)) {
-        srt[nodeToIndex[tokenID]].last_visit_cycle = current_cycle;
+        srt[nodeToIndex[tokenID]].last_visit_step = step_id;
     }
 
     int next_holder = -1;
@@ -218,8 +216,8 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
         // Gating: If ready_bits[i] is 0, the score Psi_i must be 0.
         if (!entry.ready_bit) continue;
         
-        // Age Calculation (Cycles)
-        uint64_t age = current_cycle - entry.last_visit_cycle;
+        // Age Calculation (Steps)
+        uint64_t age = step_id - entry.last_visit_step;
         
         // Formula: Psi = [(Success * Ws) + (Age * Wa)] * Ready_Bit
         double psi = (entry.success_score * config.Ws) + (age * config.Wa);
@@ -241,7 +239,7 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
         if (nodeToIndex.count(tokenID)) {
              int idx = nodeToIndex[tokenID];
              last_swj_success = srt[idx].success_score;
-             last_swj_age = current_cycle - srt[idx].last_visit_cycle;
+             last_swj_age = step_id - srt[idx].last_visit_step;
         } else {
              last_swj_success = 0.0;
              last_swj_age = 0;
@@ -263,7 +261,7 @@ void FuzzyTokenChannelState::advanceTokenSmart() {
         if (nodeToIndex.count(tokenID)) {
              int idx = nodeToIndex[tokenID];
              last_swj_success = srt[idx].success_score;
-             last_swj_age = current_cycle - srt[idx].last_visit_cycle;
+             last_swj_age = step_id - srt[idx].last_visit_step;
         } else {
              last_swj_success = 0.0;
              last_swj_age = 0;
@@ -325,12 +323,9 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         return; 
     }
 
-    // Current cycle T
-    uint64_t T = step_start_cycle + currentStepCycles;
-
-    // Update last_visit_cycle for the current token holder
+    // Update last_visit_step for the current token holder
     if (nodeToIndex.count(tokenID)) {
-        srt[nodeToIndex[tokenID]].last_visit_cycle = T;
+        srt[nodeToIndex[tokenID]].last_visit_step = step_id;
     }
 
     // Weights (Priority Scoring)
@@ -358,7 +353,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
         int idx = nodeToIndex[nodeId];
         
         double exploitation = srt[idx].success_score;
-        uint64_t age = T - srt[idx].last_visit_cycle;
+        uint64_t age = step_id - srt[idx].last_visit_step;
         double exploration = Wa * std::sqrt((double)age);
         
         double score = Ws * exploitation + exploration;
@@ -389,7 +384,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     if (next_token_holder != -1 && nodeToIndex.count(next_token_holder)) {
         int idx = nodeToIndex[next_token_holder];
         last_swj_success = srt[idx].success_score;
-        last_swj_age = T - srt[idx].last_visit_cycle;
+        last_swj_age = step_id - srt[idx].last_visit_step;
     } else {
         last_swj_success = 0.0;
         last_swj_age = 0;

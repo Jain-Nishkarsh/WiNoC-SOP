@@ -137,7 +137,7 @@ packet_injection_rate: 0.02
 probability_of_retransmission: 0
 
 traffic_distribution: TRAFFIC_SOTERIOU
-traffic_soteriou_sigma: 1.0       # Spatial spread
+traffic_soteriou_sigma: 1.2       # Spatial spread
 traffic_soteriou_hurst: 0.8       # Temporal burstiness (H)
 traffic_soteriou_hotspot: [3, 3]  # Hotspot location (x, y)
 traffic_table_filename: ""
@@ -153,6 +153,6 @@ max_volume_to_be_drained: 0
 show_buffer_stats: false
 
 # CSV Logging
-csv_log_enabled: false
+csv_log_enabled: true
 csv_routing_log_filename: ""
 csv_mac_log_filename: "swj_soteriou.csv"
