@@ -23,7 +23,7 @@
 using namespace std;
 
 // Maximum number of nodes supported
-#define MAX_FUZZY_TOKEN_NODES 256
+#define MAX_FUZZY_TOKEN_NODES 4096
 
 // Period modes
 enum FuzzyTokenMode {

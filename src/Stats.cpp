@@ -38,8 +38,10 @@ void Stats::receivedFlit(const double arrival_time,
 	i = chist.size() - 1;
     }
 
-    if (flit.flit_type == FLIT_TYPE_HEAD)
+    if (flit.flit_type == FLIT_TYPE_HEAD) {
 	chist[i].delays.push_back(arrival_time - flit.timestamp);
+    chist[i].arrival_times.push_back(arrival_time);
+    }
 
     chist[i].total_received_flits++;
     chist[i].last_received_flit_time = arrival_time - warm_up_time;
@@ -101,6 +103,21 @@ double Stats::getMaxDelay()
     }
 
     return maxd;
+}
+
+vector<double> Stats::getDelays()
+{
+    vector<double> all_delays;
+    for (unsigned int k = 0; k < chist.size(); k++) {
+        for(unsigned int j=0; j<chist[k].delays.size(); j++) {
+             // Ignore delays before stats_warm_up_time
+             double arrival_time = chist[k].arrival_times[j];
+             if (arrival_time - GlobalParams::reset_time >= GlobalParams::stats_warm_up_time) {
+                all_delays.push_back(chist[k].delays[j]);
+             }
+        }
+    }
+    return all_delays;
 }
 
 double Stats::getAverageThroughput(const int src_id)

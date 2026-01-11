@@ -11,6 +11,7 @@
 #include "GlobalStats.h"
 #include "FuzzyTokenController.h"
 #include "Target.h"
+#include <algorithm>
 using namespace std;
 
 GlobalStats::GlobalStats(const NoC * _noc)
@@ -110,6 +111,37 @@ double GlobalStats::getMaxDelay()
     }
 
     return maxd;
+}
+
+double GlobalStats::getPercentileDelay(const double p)
+{
+    vector<double> global_delays;
+
+    if (GlobalParams::topology == TOPOLOGY_MESH) 
+    {
+        for (int y = 0; y < GlobalParams::mesh_dim_y; y++)
+            for (int x = 0; x < GlobalParams::mesh_dim_x; x++) 
+            {
+                vector<double> d = noc->t[x][y]->r->stats.getDelays();
+                global_delays.insert(global_delays.end(), d.begin(), d.end());
+            }
+    }
+    else // other delta topologies
+    {
+        for (int y = 0; y < GlobalParams::n_delta_tiles; y++)
+        {
+            vector<double> d = noc->core[y]->r->stats.getDelays();
+            global_delays.insert(global_delays.end(), d.begin(), d.end());
+        }
+    }
+
+    if (global_delays.empty()) return 0.0;
+
+    sort(global_delays.begin(), global_delays.end());
+    int index = (int)ceil(p * global_delays.size()) - 1;
+    if (index >= global_delays.size()) index = global_delays.size() - 1;
+    
+    return global_delays[index];
 }
 
 double GlobalStats::getMaxDelay(const int node_id)
@@ -515,6 +547,8 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
     out << "% Average wireless utilization: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
     out << "% Global average delay (cycles): " << getAverageDelay() << endl;
     out << "% Max delay (cycles): " << getMaxDelay() << endl;
+    out << "% 95th Percentile Latency (cycles): " << getPercentileDelay(0.95) << endl;
+    out << "% 99th Percentile Latency (cycles): " << getPercentileDelay(0.99) << endl;
     out << "% Network throughput (flits/cycle): " << getAggregatedThroughput() << endl;
     out << "% Average IP throughput (flits/cycle/IP): " << getThroughput() << endl;
     out << "% Total energy (J): " << getTotalPower() << endl;

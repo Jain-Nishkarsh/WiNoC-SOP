@@ -33,6 +33,9 @@ class GlobalStats {
     // Returns the max delay
     double getMaxDelay();
 
+    // Returns the specified percentile delay (cycles) e.g. p=0.95
+    double getPercentileDelay(const double p);
+
     // Returns the max delay (cycles) experimented by destination
     // node_id. Returns -1 if node_id is not destination of any
     // communication

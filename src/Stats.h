@@ -20,7 +20,8 @@ using namespace std;
 
 struct CommHistory {
     int src_id;
-     vector < double >delays;
+    vector < double > delays;
+    vector < double > arrival_times;
     unsigned int total_received_flits;
     double last_received_flit_time;
 };
@@ -50,6 +51,9 @@ class Stats {
 
     // Returns the max delay (cycles) for the current node
     double getMaxDelay();
+
+    // Returns a vector containing all delays for the current node
+    vector<double> getDelays();
 
     // Returns the average throughput (flits/cycle) for the current node
     // and for the communication whose source is src_id

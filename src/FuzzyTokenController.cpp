@@ -597,7 +597,7 @@ void FuzzyTokenController::endStep(int channelId, StepOutcome outcome, int stepC
     if (useSWJ) {
         state->advanceTokenSWJ();
         state->switchMode(outcome);
-    } else if (useJumpFeatures && inFocusedMode) {
+    } else if (useJumpFeatures) {
         state->advanceTokenSmart();
         state->switchMode(outcome);
     } else {
