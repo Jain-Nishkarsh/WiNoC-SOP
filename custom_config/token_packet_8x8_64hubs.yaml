@@ -114,6 +114,7 @@ min_packet_size: 3
 max_packet_size: 3
 packet_injection_rate: 0.01
 probability_of_retransmission: 0
+
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 

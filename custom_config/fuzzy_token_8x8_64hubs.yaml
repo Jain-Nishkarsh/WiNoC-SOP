@@ -106,8 +106,8 @@ RadioChannels:
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
             preamble_cycles: 1
-            thr1: 0.35
-            thr2: 0.7
+            thr1: 0.1
+            thr2: 0.9
             thr_is_percentage: true
 
             initial_FA: 16
@@ -129,6 +129,7 @@ min_packet_size: 3
 max_packet_size: 3
 packet_injection_rate: 0.01
 probability_of_retransmission: 0
+
 traffic_distribution: TRAFFIC_RANDOM
 traffic_table_filename: ""
 

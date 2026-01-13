@@ -107,8 +107,8 @@ RadioChannels:
         fuzzy_token:
             control_minislot_delay: 4   # Stalls for n cycles before transmission
             preamble_cycles: 1
-            thr1: 0.35
-            thr2: 0.7
+            thr1: 0.4
+            thr2: 0.8
             thr_is_percentage: true
 
             initial_FA: 16
@@ -124,7 +124,7 @@ RadioChannels:
             Ws: 10
             Wa: 0.5
             H_threshold: 5
-            alpha: 0.1
+            alpha: 0.2
             tenure_lock_cycles: 1
 
 clock_period_ps: 1000
@@ -138,7 +138,7 @@ packet_injection_rate: 0.01
 probability_of_retransmission: 0
 
 traffic_distribution: TRAFFIC_SOTERIOU
-traffic_soteriou_sigma: 1.2       # Spatial spread
+traffic_soteriou_sigma: 1.0       # Spatial spread
 traffic_soteriou_hurst: 0.8       # Temporal burstiness (H)
 traffic_soteriou_hotspot: [3, 3]  # Hotspot location (x, y)
 traffic_table_filename: ""
