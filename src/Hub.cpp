@@ -863,6 +863,36 @@ void Hub::txRadioProcessFuzzyToken(int channel)
         bool enable_polling = usePlusFeatures || GlobalParams::csv_log_enabled;
         state->perform_control_minislot(current_cycle, enable_polling);
         node->resetStepState();
+
+        // ENERGY PENALTY: Readiness Gating Synchronization (Fuzzy Token & WiSync)
+        // Only apply if the feature is actually enabled/used
+        if (usePlusFeatures)
+        {
+            // Per-Node Energy: E_node = E_TX_bit + (N-1) * E_RX_bit
+            // Total Network Energy: E_sync = N * E_node = N * [E_TX_bit + (N-1)E_RX_bit]
+            // This corresponds to N successful 1-bit broadcasts (one from each node).
+            // Note: Idle Listening energy is consciously ignored to maintain a clean dynamic energy comparison.
+
+            double default_tx_power = GlobalParams::power_configuration.hubPowerConfig.default_tx_energy; // W
+            double rx_dynamic_j_per_bit = GlobalParams::power_configuration.hubPowerConfig.rx_dynamic; // J/bit
+            
+            // Get Datarate from channel config or default
+            double data_rate_bps;
+            if (GlobalParams::channel_configuration.count(channel))
+                data_rate_bps = GlobalParams::channel_configuration[channel].dataRate * 1e9;
+            else
+                data_rate_bps = GlobalParams::default_channel_configuration.dataRate * 1e9;
+            
+            double tx_energy_per_bit = default_tx_power / data_rate_bps;
+            
+            int N = state->numNodes; // Total nodes in channel
+            
+            // 1 bit TX (broadcast 1 bit)
+            power.getDynamicPowerBreakDown()->breakdown[WIRELESS_TX].value += tx_energy_per_bit;
+            
+            // (N-1) bits RX (receive 1 bit from every other node)
+            power.getDynamicPowerBreakDown()->breakdown[WIRELESS_DYNAMIC_RX_PWR].value += (N - 1) * rx_dynamic_j_per_bit;
+        }
     }
 
     // Stall for control minislot duration

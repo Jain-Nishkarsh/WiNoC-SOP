@@ -47,7 +47,7 @@ Hubs:
 
 RadioChannels:
     defaults:
-        data_rate: 16
+        data_rate: 20
         ber: [0, 0]
         mac_policy: [FUZZY_RAJ]
         fuzzy_token:

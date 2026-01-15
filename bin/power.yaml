@@ -117,19 +117,22 @@ Energy:
 
     Hub:
         # [RX, TX] Contribution (W)
-        transceiver_leakage: [4.43e-4, 1.10e-4]
+        # Set to 0 to isolate dynamic energy as per instruction "E_TX = 39mW/20Gbps = 1.95pJ/bit" implies per-bit model
+        transceiver_leakage: [0.0, 0.0]
 
         # [RX, TX] Contribution (W)
-        transceiver_biasing: [1.5e-2, 7.0e-3]
+        transceiver_biasing: [0.0, 0.0]
 
         # RX Dynamic Contribution in J/bit (RX Digital Interfaces)
-        rx_dynamic: 7.0e-13
+        # 1.95 pJ/bit
+        rx_dynamic: 1.95e-12
 
         # in W
         rx_snooping: 1.0e-15
 
         # TX Dynamic Contribution in W (To be divided for Datarate)
-        default_tx_energy: 1.0e-2
+        # 39 mW = 0.039 W
+        default_tx_energy: 0.039
 
         tx_attenuation_map:
         #   - [TX Hub ID, RX Hub ID, Attenuation]

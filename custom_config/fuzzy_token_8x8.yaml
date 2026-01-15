@@ -46,7 +46,7 @@ Hubs:
 
 RadioChannels:
     defaults:
-        data_rate: 16
+        data_rate: 20
         ber: [0, 0]
         mac_policy: [FUZZY_TOKEN]
         fuzzy_token:
@@ -70,8 +70,8 @@ reset_time: 100
 simulation_time: 5000  
 stats_warm_up_time: 100
 
-min_packet_size: 3
-max_packet_size: 3
+min_packet_size: 5
+max_packet_size: 5
 packet_injection_rate: 0.01
 probability_of_retransmission: 0.01
 traffic_distribution: TRAFFIC_RANDOM

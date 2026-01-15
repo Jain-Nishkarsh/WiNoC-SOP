@@ -123,7 +123,7 @@ Hubs:
 RadioChannels:
     defaults:
         # 60 GHz specifications from paper
-        data_rate: 16
+        data_rate: 20
         frequency_ghz: 60
         ber: [0, 0]
         # BMAC bidirectional token protocol
