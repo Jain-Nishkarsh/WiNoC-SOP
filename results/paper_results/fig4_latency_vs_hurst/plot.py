@@ -227,7 +227,7 @@ def plot_results(all_results: dict):
             marker=style["marker"],
             linestyle=style["linestyle"],
             color=style["color"],
-            linewidth=1.5,
+            linewidth=1.0,
             markersize=style["markersize"],
             markeredgecolor=style["color"],
             markeredgewidth=0.5,
