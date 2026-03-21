@@ -7,3 +7,4 @@ noxim
 *.png
 __pycache__/
 *.pyc
+*.eps
