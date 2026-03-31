@@ -1,0 +1,2 @@
+ - Always use the .venv folder before running any python
+ - Always run the noxim binary from within the /bin folder to avoid any "-power config not provided" errors

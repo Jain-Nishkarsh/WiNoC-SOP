@@ -8,3 +8,4 @@ noxim
 __pycache__/
 *.pyc
 *.eps
+.venv/
