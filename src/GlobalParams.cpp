@@ -36,6 +36,8 @@ double GlobalParams::locality;
 string GlobalParams::traffic_distribution;
 string GlobalParams::traffic_table_filename;
 string GlobalParams::traffic_hardcoded_filename;
+string GlobalParams::traffic_trace_filename;
+int GlobalParams::traffic_trace_flit_headtail_size;
 string GlobalParams::config_filename;
 string GlobalParams::power_config_filename;
 int GlobalParams::clock_period_ps;

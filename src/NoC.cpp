@@ -124,6 +124,19 @@ void NoC::buildCommon()
 	if (GlobalParams::traffic_distribution == TRAFFIC_HARDCODED)
 		assert(ghtable.load(GlobalParams::traffic_hardcoded_filename.c_str()));
 
+	// Check for trace-based traffic availability
+	if (GlobalParams::traffic_distribution == TRAFFIC_TRACE) {
+		int num_sources;
+		if (GlobalParams::topology == TOPOLOGY_MESH)
+			num_sources = GlobalParams::mesh_dim_x * GlobalParams::mesh_dim_y;
+		else
+			num_sources = GlobalParams::n_delta_tiles;
+
+		assert(gtrace.load(GlobalParams::traffic_trace_filename.c_str(),
+				   num_sources,
+				   GlobalParams::traffic_trace_flit_headtail_size));
+	}
+
 	// Var to track Hub connected ports
 	hub_connected_ports = (int *) calloc(GlobalParams::hub_configuration.size(), sizeof(int));
 
@@ -207,6 +220,7 @@ void NoC::buildButterfly()
 
 			// Tell to the PE its coordinates
 			t[i][j]->pe->local_id = tile_id;
+			t[i][j]->pe->traffic_trace = &gtrace;
 			t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 			t[i][j]->pe->traffic_hardcoded = &ghtable;
 			t[i][j]->pe->never_transmit = true;
@@ -536,6 +550,7 @@ void NoC::buildButterfly()
 
 		// Tell to the PE its coordinates
 		core[i]->pe->local_id = core_id;
+		core[i]->pe->traffic_trace = &gtrace;
 		// Check for traffic table availability
 		if (GlobalParams::traffic_distribution == TRAFFIC_TABLE_BASED)
 		{
@@ -861,6 +876,7 @@ void NoC::buildBaseline()
 
 	    // Tell to the PE its coordinates
 	    t[i][j]->pe->local_id = tile_id;
+	    t[i][j]->pe->traffic_trace = &gtrace;
 	    t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 	    t[i][j]->pe->traffic_hardcoded = &ghtable;
 	    t[i][j]->pe->never_transmit = true;
@@ -1304,6 +1320,7 @@ void NoC::buildBaseline()
 
 	// Tell to the PE its coordinates
 	core[i]->pe->local_id = core_id;
+	core[i]->pe->traffic_trace = &gtrace;
 	// Check for traffic table availability
 	if (GlobalParams::traffic_distribution == TRAFFIC_TABLE_BASED)
 	{
@@ -1598,6 +1615,7 @@ void NoC::buildOmega()
 
 			// Tell to the PE its coordinates
 			t[i][j]->pe->local_id = tile_id;
+			t[i][j]->pe->traffic_trace = &gtrace;
 			t[i][j]->pe->traffic_table = &gttable;	// Needed to choose destination
 			t[i][j]->pe->traffic_hardcoded = &ghtable;	// Needed to choose destination
 			t[i][j]->pe->never_transmit = true;
@@ -1939,6 +1957,7 @@ void NoC::buildOmega()
 
 		// Tell to the PE its coordinates
 		core[i]->pe->local_id = core_id;
+		core[i]->pe->traffic_trace = &gtrace;
 		// Check for traffic table availability
 		if (GlobalParams::traffic_distribution == TRAFFIC_TABLE_BASED)
 		{
@@ -2219,6 +2238,7 @@ void NoC::buildMesh()
 
 	    // Tell to the PE its coordinates
 	    t[i][j]->pe->local_id = j * GlobalParams::mesh_dim_x + i;
+	    t[i][j]->pe->traffic_trace = &gtrace;
 
 	    // Check for traffic table availability
    		if (GlobalParams::traffic_distribution == TRAFFIC_TABLE_BASED)

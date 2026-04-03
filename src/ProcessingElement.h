@@ -17,6 +17,7 @@
 #include "DataStructs.h"
 #include "GlobalTrafficTable.h"
 #include "GlobalTrafficHardcoding.h"
+#include "GlobalTrafficTrace.h"
 #include "Utils.h"
 
 using namespace std;
@@ -65,6 +66,7 @@ SC_MODULE(ProcessingElement)
     size_t traffic_cycle = 0;
     GlobalTrafficTable *traffic_table;	// Reference to the Global traffic Table
     GlobalTrafficHardcoding *traffic_hardcoded;	// Reference to the Global traffic Hardcoding
+    GlobalTrafficTrace *traffic_trace;	// Reference to the Global traffic trace
     bool never_transmit;	// true if the PE does not transmit any packet 
     //  (valid only for the table based traffic)
 

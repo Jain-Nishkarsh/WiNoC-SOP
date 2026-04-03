@@ -488,9 +488,8 @@ void Hub::tileToAntennaProcess()
 	int last_reserved = NOT_VALID;
 
 	// used to store routing decisions
-	int * r_from_tile[num_ports];
-	for (int i=0;i<num_ports;i++)
-		r_from_tile[i] = new int[GlobalParams::n_virtual_channels];
+	vector< vector<int> > r_from_tile(num_ports,
+						vector<int>(GlobalParams::n_virtual_channels, NOT_VALID));
 
 	// 1st phase: Reservation
 	for (int j = 0; j < num_ports; j++)

@@ -103,6 +103,8 @@ void loadConfiguration() {
     }
 
     GlobalParams::traffic_hardcoded_filename = readParam<string>(config, "traffic_hardcoded_filename");
+    GlobalParams::traffic_trace_filename = readParam<string>(config, "traffic_trace_filename", "");
+    GlobalParams::traffic_trace_flit_headtail_size = readParam<int>(config, "traffic_trace_flit_headtail_size", 0);
     GlobalParams::clock_period_ps = readParam<int>(config, "clock_period_ps");
     GlobalParams::simulation_time = readParam<int>(config, "simulation_time");
     GlobalParams::n_virtual_channels = readParam<int>(config, "n_virtual_channels");
@@ -264,6 +266,7 @@ void showHelp(char selfname[])
          << "\t\tbutterfly\tButterfly traffic distribution" << endl
          << "\t\tshuffle\t\tShuffle traffic distribution" << endl
          <<	"\t\ttable FILENAME\tTraffic Table Based traffic distribution with table in the specified file" << endl
+	 << "\t\ttrace FILENAME\tTraffic Trace Based distribution with one file per PE as <id>_FILENAME" << endl
          << "\t-hs ID P\t\tAdd node ID to hotspot nodes, with percentage P (0..1) (Only for 'random' traffic)" << endl
          << "\t-warmup N\t\tStart to collect statistics after N cycles" << endl
          << "\t-seed N\t\t\tSet the seed of the random generator (default time())" << endl
@@ -443,6 +446,18 @@ void checkConfiguration()
 	exit(1);
     }
 
+    if (GlobalParams::traffic_distribution == TRAFFIC_TRACE &&
+    GlobalParams::traffic_trace_filename.empty()) {
+    cerr << "Error: traffic trace filename must be specified when using TRAFFIC_TRACE" << endl;
+    exit(1);
+    }
+
+    if (GlobalParams::traffic_distribution == TRAFFIC_TRACE &&
+    GlobalParams::traffic_trace_flit_headtail_size < 1) {
+    cerr << "Error: traffic trace head/tail flit size must be positive when using TRAFFIC_TRACE" << endl;
+    exit(1);
+    }
+
 
     if (GlobalParams::n_virtual_channels>1 && GlobalParams::selection_strategy.compare("NOP")==0)
     {
@@ -595,6 +610,10 @@ void parseCmdLine(int arg_num, char *arg_vet[])
 		else if (!strcmp(traffic, "ulocal"))
 		    GlobalParams::traffic_distribution =
 			TRAFFIC_ULOCAL;
+        else if (!strcmp(traffic, "trace")) {
+            GlobalParams::traffic_distribution = TRAFFIC_TRACE;
+            GlobalParams::traffic_trace_filename = arg_vet[++i];
+        }
 		else if (!strcmp(traffic, "table")) {
 		    GlobalParams::traffic_distribution =
 			TRAFFIC_TABLE_BASED;

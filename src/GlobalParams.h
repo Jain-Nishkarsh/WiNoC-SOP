@@ -77,6 +77,7 @@ using namespace std;
 #define TRAFFIC_ULOCAL	       "TRAFFIC_ULOCAL"
 #define TRAFFIC_SOTERIOU       "TRAFFIC_SOTERIOU"
 #define TRAFFIC_HARDCODED      "TRAFFIC_HARDCODED"
+#define TRAFFIC_TRACE          "TRAFFIC_TRACE"
 
 // Verbosity levels
 #define VERBOSE_OFF            "VERBOSE_OFF"
@@ -207,6 +208,8 @@ struct GlobalParams {
     static string traffic_distribution;
     static string traffic_table_filename;
     static string traffic_hardcoded_filename;
+    static string traffic_trace_filename;
+    static int traffic_trace_flit_headtail_size;
     static string config_filename;
     static string power_config_filename;
     static int clock_period_ps;
