@@ -26,18 +26,15 @@ void ProcessingElement::rxProcess()
 	    Flit flit_tmp = flit_rx.read();
 
         // Trace mode: unlock source when destination receives packet tail.
-        if (GlobalParams::traffic_distribution == TRAFFIC_TRACE &&
+    if (GlobalParams::verbose_mode == VERBOSE_HIGH &&
+        GlobalParams::traffic_distribution == TRAFFIC_TRACE &&
         traffic_trace != NULL &&
         flit_tmp.flit_type == FLIT_TYPE_TAIL) {
-        traffic_trace->onPacketDelivered(flit_tmp.src_id);
-        if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-            unsigned long long cycle = (unsigned long long)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
-            cerr << "[TRACE-CLOSED-LOOP] cycle=" << cycle
-                 << " dst_pe=" << local_id
-                 << " tail_received_from_src=" << flit_tmp.src_id
-                 << " unlock_src=" << flit_tmp.src_id
-                 << endl;
-        }
+        unsigned long long cycle = (unsigned long long)(sc_time_stamp().to_double() / GlobalParams::clock_period_ps);
+        cerr << "[TRACE-RX] cycle=" << cycle
+             << " dst_pe=" << local_id
+             << " tail_received_from_src=" << flit_tmp.src_id
+             << endl;
         }
 
 	    current_level_rx = 1 - current_level_rx;	// Negate the old value for Alternating Bit Protocol (ABP)
@@ -99,13 +96,6 @@ void ProcessingElement::txProcess()
 	    }
 	}
 
-    if (GlobalParams::traffic_distribution == TRAFFIC_TRACE &&
-        traffic_trace != NULL &&
-        local_id == 0 &&
-        packet_queue.empty() &&
-        traffic_trace->isSimulationComplete()) {
-        sc_stop();
-    }
     }
 }
 
@@ -171,33 +161,40 @@ bool ProcessingElement::canShot(Packet & packet)
             if (traffic_trace == NULL)
                 return false;
 
+            // Rate-based injection matching synthetic mode: no source-lock
+            double threshold = GlobalParams::packet_injection_rate;
+            if (!transmittedAtPreviousCycle)
+                threshold = GlobalParams::packet_injection_rate;
+            else
+                threshold = GlobalParams::probability_of_retransmission;
+
+            if ((double)rand() / RAND_MAX >= threshold)
+                return false;
+
             TraceCommunication comm;
-            shot = traffic_trace->peekNext(local_id, comm);
+            if (!traffic_trace->getNext(local_id, comm))
+                return false;
 
-            if (shot) {
-                int total_bytes = comm.message_size + traffic_trace->getFlitHeadTailSize();
-                int packet_flits = (int)(((long long)total_bytes * 8 + GlobalParams::flit_size - 1) / GlobalParams::flit_size);
-                if (packet_flits < GlobalParams::min_packet_size)
-                    packet_flits = GlobalParams::min_packet_size;
+            int total_bytes = comm.message_size + traffic_trace->getFlitHeadTailSize();
+            int packet_flits = (int)(((long long)total_bytes * 8 + GlobalParams::flit_size - 1) / GlobalParams::flit_size);
+            if (packet_flits < GlobalParams::min_packet_size)
+                packet_flits = GlobalParams::min_packet_size;
 
-                int vc = randInt(0, GlobalParams::n_virtual_channels - 1);
-                packet.make(local_id, comm.dst, vc, now, packet_flits);
+            int vc = randInt(0, GlobalParams::n_virtual_channels - 1);
+            packet.make(local_id, comm.dst, vc, now, packet_flits);
 
-                if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
-                    unsigned long long cycle = (unsigned long long)(now);
-                    cerr << "[TRACE-INJECT] cycle=" << cycle
-                         << " src_pe=" << local_id
-                         << " dst_pe=" << comm.dst
-                         << " message_bytes=" << comm.message_size
-                         << " headtail_bytes=" << traffic_trace->getFlitHeadTailSize()
-                         << " packet_flits=" << packet_flits
-                         << endl;
-                }
-
-                traffic_trace->onPacketQueued(local_id);
+            if (GlobalParams::verbose_mode == VERBOSE_HIGH) {
+                unsigned long long cycle = (unsigned long long)(now);
+                cerr << "[TRACE-INJECT] cycle=" << cycle
+                     << " src_pe=" << local_id
+                     << " dst_pe=" << comm.dst
+                     << " message_bytes=" << comm.message_size
+                     << " headtail_bytes=" << traffic_trace->getFlitHeadTailSize()
+                     << " packet_flits=" << packet_flits
+                     << endl;
             }
 
-            return shot;
+            return true;
         }
         
         double current_pir = current_packet_injection_rate;

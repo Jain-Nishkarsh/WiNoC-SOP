@@ -34,7 +34,7 @@ OPT      := -O3 -march=native -fno-strict-aliasing
 # to enable logs with LOG macro, uncomment "-g DDEBUG" in the line below
 # and recompile everythin (make clean)
 # DEBUG    :=  -g -DDEBUG
-OTHER    := -Wall -DSC_NO_WRITE_CHECK --std=c++11 # -Wno-deprecated
+OTHER    := -Wall -DSC_NO_WRITE_CHECK --std=c++17 # Match SystemC ABI (cxx201703L)
 CXXFLAGS := $(OPT) $(OTHER) $(DEBUG)
 
 INCDIR := -I$(SRCDIR) -isystem $(SYSTEMC)/include -I$(CURDIR)/libs/yaml-cpp/include

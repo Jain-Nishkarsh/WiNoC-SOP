@@ -1,9 +1,3 @@
-/*
- * Noxim - the NoC Simulator
- *
- * This file contains the implementation of the global traffic trace controller
- */
-
 #include "GlobalTrafficTrace.h"
 #include "GlobalParams.h"
 
@@ -52,55 +46,16 @@ bool GlobalTrafficTrace::load(const char *base_filename, int num_sources, int _f
     return true;
 }
 
-bool GlobalTrafficTrace::canSend(int src)
+bool GlobalTrafficTrace::getNext(int src, TraceCommunication &comm)
 {
     if (src < 0 || src >= (int)sources.size())
         return false;
 
-    if (sources[src].locked)
-        return false;
-
-    return prefetchNext(src);
-}
-
-bool GlobalTrafficTrace::peekNext(int src, TraceCommunication &comm)
-{
-    if (!canSend(src))
+    if (!prefetchNext(src))
         return false;
 
     comm = sources[src].cached;
-    return true;
-}
-
-void GlobalTrafficTrace::onPacketQueued(int src)
-{
-    if (src < 0 || src >= (int)sources.size())
-        return;
-
-    if (sources[src].has_cached)
-        sources[src].has_cached = false;
-
-    sources[src].locked = true;
-}
-
-void GlobalTrafficTrace::onPacketDelivered(int src)
-{
-    if (src < 0 || src >= (int)sources.size())
-        return;
-
-    sources[src].locked = false;
-}
-
-bool GlobalTrafficTrace::isSimulationComplete()
-{
-    for (int src = 0; src < (int)sources.size(); src++) {
-        if (sources[src].locked)
-            return false;
-
-        if (prefetchNext(src))
-            return false;
-    }
-
+    sources[src].has_cached = false;
     return true;
 }
 

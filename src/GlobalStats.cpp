@@ -544,7 +544,7 @@ void GlobalStats::showStats(std::ostream & out, bool detailed)
     out << "% Total received flits: " << getReceivedFlits() << endl;
     out << "% Received/Ideal flits Ratio: " << getReceivedIdealFlitRatio() << endl;
     out << "% Received/Injected flits Ratio: " << getReceivedInjectedFlitRatio() << endl;
-    out << "% Average wireless utilization: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
+    out << "% Average wireless flit ratio: " << getWirelessPackets()/(double)getReceivedPackets() << endl;
     out << "% Global average delay (cycles): " << getAverageDelay() << endl;
     out << "% Max delay (cycles): " << getMaxDelay() << endl;
     out << "% 95th Percentile Latency (cycles): " << getPercentileDelay(0.95) << endl;

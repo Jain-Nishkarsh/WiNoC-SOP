@@ -376,6 +376,7 @@ void FuzzyTokenChannelState::advanceTokenSWJ() {
     if (challenger_id != -1 && max_challenger_score > (current_holder_score + H_threshold)) {
         next_token_holder = challenger_id;
         winning_score = max_challenger_score;
+        tenure_cycles_remaining = config.tenure_lock_cycles;
     }
 
     // Store debug metrics

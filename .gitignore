@@ -4,8 +4,21 @@ noxim
 .DS_Store
 .vscode
 *.csv
+*.log
 *.png
 __pycache__/
 *.pyc
 *.eps
+m5out/
 .venv/
+traces/
+
+# ocean_cp benchmark outputs and generated traffic
+results/csv_debug/
+results/csv_debug_v2/
+results/generate_traffic/traces/
+results/generate_traffic/gem5_ocean_cp_run*/m5out/
+results/ocean_cp/
+results/ocean_cp_64c/
+results/ocean_cp_final/
+results/ocean_cp_runs/
